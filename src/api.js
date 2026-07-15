@@ -53,6 +53,7 @@ const WMC_API = {
   },
   auctions: (sort = "ending_soon", page = 1, limit = 50) =>
     WMC_API.get(`/api/marketplace?page=${page}&limit=${limit}&sort=${sort}`), // { auctions:[...] }
+  auctionOne: (auctionId) => WMC_API.get(`/api/marketplace/${auctionId}`), // { auction:{...}, bids:[...] } — freshest single price
   myMarket: () => WMC_API.get("/api/marketplace/mine"), // { selling:[], bidding:[] }
   guildHome: () => WMC_API.get("/api/guilds/home"), // { guild, wishlist:[...], leaderboard }
   contest: () => WMC_API.get("/api/contest"),

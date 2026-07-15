@@ -1,12 +1,10 @@
-// Assembles the Firefox build of the extension from the SAME source as Chrome.
-// Single source of truth: the root manifest.json + src/ + icons/. We only
-// transform the manifest where Firefox MV3 differs from Chrome MV3:
+// Assembles the Firefox build from the SAME source as Chrome. Single source of
+// truth: root manifest.json + src/ + icons/. We only transform where Firefox
+// MV3 differs from Chrome MV3:
 //   - background: Chrome uses `service_worker`; Firefox uses an event page
-//     (`scripts`). Chrome rejects a `scripts` key, so we can't share one
-//     manifest — hence this generated variant.
+//     (`scripts`). We list the deps in load order so they're defined before
+//     background.js runs (its importScripts guard is skipped on Firefox).
 //   - browser_specific_settings.gecko.id is required by Firefox/AMO.
-//   - strict_min_version 128 = when Firefox shipped content-script `world:
-//     "MAIN"` (used by src/net-sniffer.js).
 //
 // Output: dist-firefox/ (ready to zip into an .xpi). Run: node tools/build-firefox.mjs
 
@@ -20,8 +18,8 @@ const dist = join(repo, "dist-firefox");
 
 const manifest = JSON.parse(readFileSync(join(repo, "manifest.json"), "utf8"));
 
-// No background/service worker anymore (automation runs in the content-script
-// engine). Firefox just needs a gecko id for signing/AMO.
+// Chrome service worker -> Firefox event-page background (deps first).
+manifest.background = { scripts: ["src/config.js", "src/api.js", "src/engine.js", "src/background.js"] };
 manifest.browser_specific_settings = {
   gecko: { id: "mephisto@jgourdin", strict_min_version: "128.0" },
 };

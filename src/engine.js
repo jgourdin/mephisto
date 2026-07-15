@@ -3,8 +3,9 @@
 // (WMC_API), so it is page-independent: no need to be on /pulls or
 // /marketplace, and no page-switching. State persists in chrome.storage.
 //
-// Three jobs each cycle: open packs, auto-bid (reactive "defend"), auto-sell
-// (flip owned cards higher). All bounded by the guardrails in config.js.
+// The slow cycle runs two background jobs: open packs and auto-sell (flip owned
+// cards higher). Bidding is a separate endgame sniper on a fast timer (page
+// driver only). All bounded by the guardrails in config.js.
 
 const WMC_ENGINE = (() => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -34,13 +35,50 @@ const WMC_ENGINE = (() => {
     await sleep(a + Math.random() * (b - a));
   }
 
-  async function spentToday() {
-    const s = await store.get({ wmcSpendDay: today(), wmcSpendWb: 0 });
-    return s.wmcSpendDay === today() ? s.wmcSpendWb : 0;
+  // Shared, short-lived auctions snapshot so the slow cycle and the fast sniper
+  // loop don't each hammer the marketplace endpoint (429 → the game's own listing
+  // fetch gets throttled and blanks the page). Also records price history for the
+  // dashboard on every fetch.
+  let auctionsCache = { at: 0, list: [] };
+  async function getAuctions(fresh = false) {
+    if (!fresh && Date.now() - auctionsCache.at < 5_000) return auctionsCache.list;
+    const { auctions = [] } = await WMC_API.auctions("ending_soon", 1, 50).catch(() => ({}));
+    auctionsCache = { at: Date.now(), list: auctions };
+    if (typeof WMC_DB !== "undefined") {
+      const now = Date.now();
+      for (const a of auctions) WMC_DB.recordAuction(a, now);
+    }
+    return auctions;
   }
-  async function addSpend(wb) {
-    await store.set({ wmcSpendDay: today(), wmcSpendWb: (await spentToday()) + wb });
+  const invalidateAuctions = () => {
+    auctionsCache.at = 0;
+  };
+
+  // Daily spend guardrail by balance delta: (day-start balance − current balance).
+  // We anchor the balance the first time we see a new day and compare against it.
+  // This is robust and proxy-safe: the ledger endpoint only returns a sliding
+  // window of recent entries (older ones scroll off, so summing it under-counts),
+  // whereas the live balance already nets escrows, refunds and wins. It also
+  // self-regulates — WB tied up in in-flight escrows count as spent, pausing new
+  // bids until they refund. A mid-day first run anchors to "now", so the cap
+  // bounds Méphisto's own session spend rather than the whole calendar day.
+  let committedCache = { at: 0, wb: 0 };
+  async function committedTodayWb() {
+    if (Date.now() - committedCache.at < 15_000) return committedCache.wb;
+    const j = await WMC_API.balance().catch(() => null);
+    if (!j || typeof j.balance !== "number") return committedCache.wb; // keep last known on failure
+    const day = today();
+    let ds = (await store.get({ wmcDayStart: null })).wmcDayStart;
+    if (!ds || ds.day !== day) {
+      ds = { day, balance: j.balance };
+      await store.set({ wmcDayStart: ds });
+    }
+    committedCache = { at: Date.now(), wb: Math.max(0, ds.balance - j.balance) };
+    return committedCache.wb;
   }
+  const invalidateCommitted = () => {
+    committedCache.at = 0;
+  };
 
   // ---------- open packs ----------
   async function openPacks(cfg) {
@@ -71,8 +109,7 @@ const WMC_ENGINE = (() => {
     if (opened) wmcNotify("😈 Paquets éventrés", `${opened} paquet(s) ouvert(s), ${remaining} restant(s).`);
   }
 
-  // ---------- auto-bid (reactive defend) ----------
-  const ANTI_SNIPE_FLOOR = 15;
+  // ---------- market helpers ----------
   const nextBidOf = (a) => (a.current_bidder_id ? a.current_bid + 1 : a.base_amount);
   const secondsLeft = (a) => (new Date(a.end_at).getTime() - Date.now()) / 1000;
 
@@ -80,61 +117,61 @@ const WMC_ENGINE = (() => {
   // yourself). No pseudo => forced dry-run, whatever cfg.dryRun says.
   const isDry = (cfg) => cfg.dryRun || !(cfg.myUsername || "").trim();
 
-  async function autoBid(cfg) {
-    if (!cfg.autoBid) return;
-    const { wmcLastBidAt } = await store.get({ wmcLastBidAt: 0 });
-    if (Date.now() - wmcLastBidAt < (cfg.bidCooldownMs ?? 20_000)) return;
-
-    const { auctions = [] } = await WMC_API.auctions("ending_soon", 1, 50).catch(() => ({}));
-    if (typeof WMC_DB !== "undefined") {
-      const now = Date.now();
-      for (const a of auctions) WMC_DB.recordAuction(a, now); // price history for the dashboard
-    }
+  // ---------- endgame sniper ----------
+  // With anti-snipe, a bid under ~11 s left bumps the timer by ~1 min, so an
+  // auction is only ever decided in its final seconds. Bidding the instant you're
+  // outbid just escalates the price early for nothing. So we stay out until an
+  // eligible auction (SR+, affordable, not ours, not already led by us) enters the
+  // endgame window and bid ONCE there, just above the reset threshold. If a rival
+  // bids under the floor THEY trigger the extension, handing us a fresh window to
+  // snipe again — so we never need to bid below the floor ourselves.
+  // Runs on a fast timer in the page driver; precise timing is impossible from a
+  // background service-worker alarm (min 1 min ≫ the ~10 s window), so nothing is
+  // sniped with the tab closed — by design.
+  const SNIPE_MIN = 12; // never bid under this — margin above the ~11 s reset + network latency
+  const SNIPE_MAX = 22; // don't bid earlier — wide enough for the ~5–8 s loop to catch the window
+  async function snipeEndgame() {
+    const cfg = await store.get(WMC_DEFAULTS);
+    if (!cfg.enabled || !cfg.autoBid) return;
+    if (running || Date.now() < backoffUntil) return;
+    if (isDry(cfg)) return; // no pseudo / dry-run → observe only
     const me = cfg.myUsername;
-    const eligible = auctions.filter(
+    // Cheap scan off the shared cache — end_at is stable, so seconds-left is
+    // accurate even from a slightly old snapshot.
+    const inWindow = (await getAuctions()).filter(
       (a) =>
         a.status === "active" &&
         cfg.targetRarities.includes(a.card?.rarity) &&
         a.seller?.username !== me &&
         a.current_bidder?.username !== me && // not already leading
         nextBidOf(a) <= cfg.maxBidWb &&
-        secondsLeft(a) > ANTI_SNIPE_FLOOR
+        secondsLeft(a) >= SNIPE_MIN &&
+        secondsLeft(a) <= SNIPE_MAX
     );
-    if (!eligible.length) return;
+    if (!inWindow.length) return; // nothing in the endgame yet — wait, don't escalate early
+    inWindow.sort((x, y) => secondsLeft(x) - secondsLeft(y)); // most urgent first
+    const pick = inWindow[0];
 
-    const byPrice = (list) => list.slice().sort((x, y) => nextBidOf(x) - nextBidOf(y));
-    const cheapest = (list) => byPrice(list)[0];
-    // Don't always grab the absolute cheapest — pick randomly among the 3
-    // cheapest, so choices aren't perfectly predictable.
-    const cheapishRandom = (list) => pickOne(byPrice(list).slice(0, 3));
-    let pick;
-    if (cfg.bidStrategy === "defend") {
-      // Re-claim auctions we already invested in (proxy-bid up to maxBidWb to
-      // actually WIN) before starting a new one; keep defending strategic.
-      const engaged = new Set((await store.get({ wmcEngaged: [] })).wmcEngaged);
-      pick = cheapest(eligible.filter((a) => engaged.has(a.id))) || cheapishRandom(eligible);
-    } else {
-      pick = cheapishRandom(eligible); // legacy "cheap"
-    }
+    // Confirm on the freshest single-auction read: true price + true timing (the
+    // list lags on a just-extended auction), so we bid the right amount at the
+    // right moment and skip the stale-price 409 entirely.
+    const a = (await WMC_API.auctionOne(pick.id).catch(() => null))?.auction;
+    if (!a || a.status !== "active" || a.current_bidder?.username === me) return;
+    const sl = secondsLeft(a);
+    if (sl < SNIPE_MIN || sl > SNIPE_MAX) return; // timing moved — catch it next tick
+    const amount = nextBidOf(a);
+    if (amount > cfg.maxBidWb) return; // rival jumped past our max — let it go
+    if ((await committedTodayWb()) + amount > cfg.dailySpendCapWb) return;
 
-    const amount = nextBidOf(pick);
-    if ((await spentToday()) + amount > cfg.dailySpendCapWb) return;
-
-    if (isDry(cfg)) {
-      wmcNotify("😈 Illusion (dry-run)", `Aurait misé ${amount} WB sur ${pick.card?.wikipedia_title} (${pick.card?.rarity}).`);
-      await store.set({ wmcLastBidAt: Date.now() });
-      return;
-    }
-    await jitter(cfg);
     const res = await WMC_API.bid(pick.id, amount);
-    await store.set({ wmcLastBidAt: Date.now() });
-    if (res.status === 429) return backoff(180_000); // rate limited — pause
+    if (res.status === 429) return backoff(120_000);
+    if (res.status === 409) return invalidateAuctions(); // out-sniped in the same instant — retry next tick
     if (res.ok) {
-      await addSpend(amount);
-      const engaged = new Set((await store.get({ wmcEngaged: [] })).wmcEngaged);
-      engaged.add(pick.id);
-      await store.set({ wmcEngaged: [...engaged].slice(-100) });
-      wmcNotify("😈 Pacte scellé", `${pick.card?.wikipedia_title} (${pick.card?.rarity}) pour ${amount} WB. Remboursé si surenchéri.`);
+      invalidateAuctions();
+      invalidateCommitted();
+      const title = a.card?.wikipedia_title ?? pick.card?.wikipedia_title;
+      const rarity = a.card?.rarity ?? pick.card?.rarity;
+      wmcNotify("😈 Pacte scellé", `${title} (${rarity}) pour ${amount} WB à ${Math.round(sl)}s. Remboursé si surenchéri.`);
     }
   }
 
@@ -150,19 +187,16 @@ const WMC_ENGINE = (() => {
 
     const listed = new Set((mine.selling || []).map((a) => a.card?.id ?? a.card_id));
     const { cards } = await WMC_API.ownedCards().catch(() => ({ cards: [] }));
-    const order = { L: 0, UR: 1, SR: 2 };
-    const candidates = cards
-      .filter(
-        (c) =>
-          cfg.sellRarities.includes(c.rarity) &&
-          !(cfg.sellSkipStarred && c.starred) && // keep favourites
-          !listed.has(c.id)
-      )
-      .sort((a, b) => (order[a.rarity] ?? 9) - (order[b.rarity] ?? 9));
+    const candidates = cards.filter(
+      (c) =>
+        cfg.sellRarities.includes(c.rarity) && // UR/SR only — never Legendaries
+        !(cfg.sellSkipStarred && c.starred) && // keep favourites
+        !listed.has(c.id)
+    );
     if (!candidates.length) return;
-    // Favour higher rarity but pick randomly among the top few, and vary the
-    // price a bit so listings aren't carbon copies.
-    const card = pickOne(candidates.slice(0, 5));
+    // Pick a random card among all UR/SR candidates (no rarity priority), and vary
+    // the price a bit so listings aren't carbon copies.
+    const card = pickOne(candidates);
     const price = Math.max(1, Math.round(cfg.sellStartWb * rnd(0.85, 1.2)));
 
     if (isDry(cfg)) {
@@ -185,7 +219,8 @@ const WMC_ENGINE = (() => {
     running = true;
     try {
       // Shuffle the job order and occasionally skip one — humans aren't tidy.
-      const jobs = shuffle([() => openPacks(cfg), () => autoBid(cfg), () => autoSell(cfg)]);
+      // Bidding is NOT here — it's the endgame sniper on its own fast timer.
+      const jobs = shuffle([() => openPacks(cfg), () => autoSell(cfg)]);
       for (const job of jobs) {
         if (chance(0.15)) continue;
         await job();
@@ -198,5 +233,5 @@ const WMC_ENGINE = (() => {
     }
   }
 
-  return { runCycle, openPacks, autoBid, autoSell };
+  return { runCycle, openPacks, autoSell, snipeEndgame };
 })();

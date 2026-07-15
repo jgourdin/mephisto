@@ -26,9 +26,9 @@ const WMC_DEFAULTS = {
 
   // --- Auto-sell (flip: relist owned cards higher to make WB) ---
   autoSell: false,
-  sellRarities: ["SR", "UR", "L"], // only flip cards worth it; never list below SR
+  sellRarities: ["SR", "UR"], // flip UR/SR only — Legendaries are keepers, never auto-sold
   sellStartWb: 50, // starting price for auto-listings (aim above your buy cost)
-  sellDurationMin: 360, // auction duration for listings (minutes) — 6h
+  sellDurationMin: 10, // auction duration for listings (minutes)
   sellSlotMax: 5, // don't exceed the active-sell limit (5 free / 10 PRO)
   sellSkipStarred: true, // never auto-sell favourites — star a card to keep it
 

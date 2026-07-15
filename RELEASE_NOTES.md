@@ -1,29 +1,27 @@
-# 😈 Méphisto v0.4.0
+# 😈 Méphisto v0.5.0
 
-Companion perso pour [WikiMasters](https://www.wiki-masters.com) : ouvre tes paquets, enchérit et revend automatiquement, avec un dashboard sur la page du jeu. Dispo en **extension Chrome/Firefox** et en **app Android**.
+Companion perso pour [WikiMasters](https://www.wiki-masters.com) : ouvre tes paquets, **snipe** les enchères et revend automatiquement, avec un dashboard sur la page du jeu. Dispo en **extension Chrome/Firefox** et en **app Android**.
 
 ## Nouveautés
 
-- ⚙️ **Moteur unifié, page-indépendant** — auto-open, auto-bid et auto-sell tournent depuis n'importe quelle page du jeu. Plus besoin de changer de page à la main.
-- 🎯 **Auto-bid réactif** — défend ses enchères jusqu'à ta mise max (achats **SR et +** uniquement). Il gagne au lieu de se faire sortir.
-- 💰 **Auto-sell (flip)** — reliste tes cartes SR+ (hors favoris ★) à un prix cible pour faire des WikiBidous. Étoile une carte pour ne jamais la vendre.
-- 🦊 **Firefox** en plus de Chrome, et 📱 **app Android** (APK).
-- 🛡️ **Sécurité** — impossible de désactiver le dry-run sans avoir renseigné ton pseudo ; plafonds mise max + dépense/jour ; dry-run pour tout simuler avant.
-- 🩹 **Correctif** — fini l'« écran vide » sur la marketplace (on ne sature plus l'API).
-- 🎭 **Plus discret** — cadence irrégulière et choix aléatoires (moins robotique).
-- 😈 Nouvelle icône.
+- 🎯 **Sniper de fin de partie** — fini les mises précoces qui font monter le prix pour rien. Méphisto reste en embuscade et ne frappe que dans la dernière fenêtre (~12-15 s, juste au-dessus du seuil anti-snipe). Tu gagnes plus, et moins cher. Achats **SR et +** uniquement, toujours sous ta mise max.
+- 🩹 **Fini l'« écran vide » de la marketplace** — usage de l'API bien plus économe (cache partagé, lectures ciblées) : on ne sature plus les requêtes du jeu.
+- 🛡️ **Plafond de dépense fiable** — calculé sur ton solde réel (delta du jour). Il se met en pause tout seul quand trop de WikiBidous sont engagés, et reprend au remboursement.
+- ⚙️ **Moteur en arrière-plan** — l'ouverture de paquets et la mise en vente tournent même onglet fermé (service worker). ⚠️ Le **snipe**, lui, demande l'onglet du jeu ouvert : viser la bonne seconde est impossible depuis une alarme d'arrière-plan.
+- 💰 **Auto-sell (flip)** — reliste au hasard tes cartes **UR/SR** (jamais les Légendaires, ni les favoris ★) à un prix cible, durée 10 min.
+- 🔒 **Sécurité** — dry-run impossible à désactiver sans pseudo, plafonds mise max + dépense/jour.
 
 ## Installer
 
 - **Chrome / Arc / Brave / Edge** : télécharge `mephisto-extension.zip`, décompresse, `chrome://extensions` → Mode développeur → « Charger l'extension non empaquetée ».
 - **Firefox** : `mephisto-firefox.zip` → `about:debugging` → « Charger un module temporaire » (ou signé via AMO pour du permanent).
-- **Android** : `mephisto-v0.4.0.apk` → ouvrir sur le téléphone → autoriser la source.
+- **Android** : `mephisto-v0.5.0.apk` → ouvrir sur le téléphone → autoriser la source.
 
 Procédures détaillées dans le [README](https://github.com/jgourdin/mephisto#installation).
 
 ## Pour démarrer
 
-Renseigne **ton pseudo** dans le panneau 😈, laisse **Dry-run** coché pour observer, puis décoche pour passer en réel. Tourne tant que l'onglet du jeu est ouvert.
+Renseigne **ton pseudo** dans le panneau 😈, laisse **Dry-run** coché pour observer, puis décoche pour passer en réel. Le sniper tourne tant que l'onglet du jeu est ouvert.
 
 ## ⚠️ Avertissement
 
