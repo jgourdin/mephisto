@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Méphisto — pacte pour WikiMasters",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Le démon des enchères de wiki-masters.com : pack timer, auto-open, veille marché avec historique de prix, wishlist guilde, dashboard. Usage personnel / apprentissage. « Le diable est dans les enchères. »",
   "permissions": ["storage", "unlimitedStorage"],
   "host_permissions": ["https://www.wiki-masters.com/*"],
