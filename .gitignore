@@ -18,3 +18,6 @@ android/app/src/main/assets/companion.js
 # Build/release artifacts (attached to GitHub Releases, not committed)
 /mephisto-*.apk
 /mephisto-extension.zip
+/mephisto-firefox.zip
+# Generated Firefox package (single source = root manifest + src/)
+dist-firefox/

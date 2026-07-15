@@ -64,16 +64,25 @@ Les endpoints POST non vérifiés (mise en vente, don guilde, ouverture de paque
 
 ## Installation
 
-Il faut un navigateur **basé sur Chrome sur ordinateur** (Chrome, Arc, Brave, Edge). Pas de support mobile — voir plus bas.
+Extension pour **navigateur de bureau**, en deux variantes : **Chrome** (et dérivés Arc / Brave / Edge) et **Firefox**. Pour mobile, voir [App Android](#app-android).
 
-1. Télécharge `mephisto-extension.zip` depuis la [dernière release](https://github.com/jgourdin/mephisto/releases/latest) et décompresse-le (garde le dossier `mephisto` à un endroit stable, pas dans un dossier que tu vides).
+### Chrome / Arc / Brave / Edge
+
+1. Télécharge `mephisto-extension.zip` depuis la [dernière release](https://github.com/jgourdin/mephisto/releases/latest) et décompresse-le (garde le dossier à un endroit stable, pas dans un dossier que tu vides).
 2. Ouvre `chrome://extensions`, active **« Mode développeur »** (en haut à droite).
-3. Clique **« Charger l'extension non empaquetée »** → choisis le dossier `mephisto`.
+3. Clique **« Charger l'extension non empaquetée »** → choisis le dossier décompressé.
 4. Épingle l'icône (🧩 en haut à droite → épingle Méphisto).
-5. Sur wiki-masters.com : le bouton **Méphisto en bas à droite** (le logo du démon) ouvre le dashboard ; le popup (icône dans la barre) contient les réglages.
-6. Tout est **désactivé par défaut**. Coche « Automation active » pour démarrer ; laisse **« Dry-run »** coché tant que tu veux juste tester (simule sans agir).
 
-> Installation en mode développeur : Chrome peut afficher un avertissement au démarrage (« désactiver les extensions en mode développeur ») — clique « Conserver ». Aucune donnée ne quitte ta machine ; automatiser son compte se fait à ton propre risque.
+> Chrome peut afficher un avertissement au démarrage (« désactiver les extensions en mode développeur ») — clique « Conserver ».
+
+### Firefox
+
+- **Tester tout de suite** : va sur `about:debugging#/runtime/this-firefox` → **« Charger un module complémentaire temporaire »** → sélectionne `mephisto-firefox.zip` (ou son `manifest.json`). Valable jusqu'au redémarrage de Firefox.
+- **Installation permanente / pour tes amis** : Firefox exige une **signature Mozilla**. Soumets `mephisto-firefox.zip` sur [addons.mozilla.org (Developer Hub)](https://addons.mozilla.org/developers/) en **auto-distribution (« On your own » / unlisted)** → Mozilla signe → tu récupères un `.xpi` signé installable définitivement (gratuit, pas de listing public obligatoire).
+
+### Utilisation (Chrome & Firefox)
+
+Sur wiki-masters.com : le bouton **Méphisto en bas à droite** (le logo du démon) ouvre le dashboard ; le popup (icône dans la barre) contient les réglages. Tout est **désactivé par défaut** — coche « Automation active » pour démarrer, et laisse **« Dry-run »** coché tant que tu veux juste tester (simule sans agir). Aucune donnée ne quitte ta machine.
 
 ### Mobile ?
 

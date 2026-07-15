@@ -11,7 +11,8 @@
       border:none;padding:0;overflow:hidden;background:#4c1d95;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4)}
     #wmc-fab img{width:100%;height:100%;object-fit:cover;display:block}
     #wmc-panel h2 img{width:22px;height:22px;border-radius:5px;vertical-align:-5px;margin-right:6px}
-    #wmc-panel{position:fixed;right:16px;bottom:70px;z-index:2147483000;width:340px;max-height:75vh;overflow:auto;
+    #wmc-panel{position:fixed;right:12px;bottom:70px;z-index:2147483000;box-sizing:border-box;
+      width:min(340px, calc(100vw - 24px));max-height:75vh;overflow:auto;
       background:#0b1020;color:#e5e7eb;border:1px solid #334155;border-radius:12px;padding:14px;font:13px/1.45 system-ui,sans-serif}
     #wmc-panel h2{font-size:14px;margin:0 0 8px}
     #wmc-panel h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;margin:14px 0 6px}
