@@ -17,7 +17,7 @@ jobs:
       # Regenerate the WebView JS bundle from the extension source (single source of truth).
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - name: Generate companion.js
         run: node android/tools/build-companion.mjs
 

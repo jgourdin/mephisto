@@ -7,7 +7,7 @@
 //
 // Run from anywhere: `node android/tools/build-companion.mjs`
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -93,5 +93,8 @@ ${modulesJs}
 })();
 `;
 
+// The assets dir isn't tracked by git (companion.js is generated + ignored),
+// so it won't exist on a fresh CI checkout — create it before writing.
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, bundle);
 console.log("Wrote " + out + " (" + bundle.length + " bytes, " + MODULES.length + " modules + shim)");
