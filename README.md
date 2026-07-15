@@ -1,4 +1,8 @@
-# 😈 Méphisto — pacte pour WikiMasters
+<p align="center">
+  <img src="icons/icon128.png" alt="Méphisto" width="120" />
+</p>
+
+# Méphisto — pacte pour WikiMasters
 
 > « Le diable est dans les enchères. »
 
@@ -48,7 +52,7 @@ Il faut un navigateur **basé sur Chrome sur ordinateur** (Chrome, Arc, Brave, E
 2. Ouvre `chrome://extensions`, active **« Mode développeur »** (en haut à droite).
 3. Clique **« Charger l'extension non empaquetée »** → choisis le dossier `mephisto`.
 4. Épingle l'icône (🧩 en haut à droite → épingle Méphisto).
-5. Sur wiki-masters.com : le bouton **😈 en bas à droite** ouvre le dashboard ; le popup (icône dans la barre) contient les réglages.
+5. Sur wiki-masters.com : le bouton **Méphisto en bas à droite** (le logo du démon) ouvre le dashboard ; le popup (icône dans la barre) contient les réglages.
 6. Tout est **désactivé par défaut**. Coche « Automation active » pour démarrer ; laisse **« Dry-run »** coché tant que tu veux juste tester (simule sans agir).
 
 > Installation en mode développeur : Chrome peut afficher un avertissement au démarrage (« désactiver les extensions en mode développeur ») — clique « Conserver ». Aucune donnée ne quitte ta machine ; automatiser son compte se fait à ton propre risque.
