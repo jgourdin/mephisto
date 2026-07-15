@@ -21,23 +21,22 @@
 
     <label class="kill">Automation active <input type="checkbox" id="enabled" /></label>
     <label class="dry">Mode dry-run <input type="checkbox" id="dryRun" /></label>
-    <p class="hint">Dry-run = simule les actions (mise/don) sans les exécuter. Automation décochée = observation seule.</p>
+    <p class="hint">Dry-run = simule (mise/vente/ouverture) sans exécuter. Automation décochée = observation seule. Tourne tant que l'onglet du jeu est ouvert.</p>
 
     <div class="section">
-      <label>Pack timer (notifs) <input type="checkbox" id="packTimer" /></label>
       <label>Auto-open paquets <input type="checkbox" id="autoOpen" /></label>
     </div>
 
     <div class="section">
-      <label>Veille marché <input type="checkbox" id="marketWatch" /></label>
-      <label>Auto-bid <input type="checkbox" id="autoBid" /></label>
+      <label>Auto-bid (SR et +) <input type="checkbox" id="autoBid" /></label>
       <label>Mise max (WB) <input type="number" id="maxBidWb" min="1" /></label>
       <label>Plafond dépense/jour <input type="number" id="dailySpendCapWb" min="0" /></label>
     </div>
 
     <div class="section">
-      <label>Veille wishlist guilde <input type="checkbox" id="guildWatch" /></label>
-      <label>Auto-don (1/jour) <input type="checkbox" id="autoGift" /></label>
+      <label>Auto-sell (flip) <input type="checkbox" id="autoSell" /></label>
+      <label>Prix de vente (WB) <input type="number" id="sellStartWb" min="1" /></label>
+      <p class="hint">Reliste tes cartes SR+ (hors favoris ★) à ce prix. Étoile une carte pour ne jamais la vendre.</p>
     </div>
 
     <div class="section">
@@ -46,7 +45,7 @@
     </div>
 
     <button class="link" id="openDashboard">Ouvrir le dashboard</button>
-    <p class="hint">L'auto-bid ne mise jamais sous 15 s restantes (anti-snipe +60 s), max 1 mise / 90 s. Les endpoints de vente/don s'apprennent à ta 1re action manuelle.</p>
+    <p class="hint">Auto-bid réactif : remonte jusqu'à ta mise max pour garder la tête. Jamais sous 15 s restantes (anti-snipe +60 s).</p>
 
     <script src="popup.js"></script>
   </body>

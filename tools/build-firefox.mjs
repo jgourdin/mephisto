@@ -20,8 +20,8 @@ const dist = join(repo, "dist-firefox");
 
 const manifest = JSON.parse(readFileSync(join(repo, "manifest.json"), "utf8"));
 
-// Chrome service worker -> Firefox event-page background.
-manifest.background = { scripts: ["src/background.js"] };
+// No background/service worker anymore (automation runs in the content-script
+// engine). Firefox just needs a gecko id for signing/AMO.
 manifest.browser_specific_settings = {
   gecko: { id: "mephisto@jgourdin", strict_min_version: "128.0" },
 };

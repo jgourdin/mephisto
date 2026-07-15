@@ -1,17 +1,30 @@
-// Thin wrappers over the game's same-origin API. Auth = the page's existing
-// session cookies; we send nothing extra. All contracts verified live on
-// 2026-07-15 (see docs/recon.md).
+// Thin wrappers over the game's API. Auth = the WikiMasters session cookies.
+// Works in TWO contexts:
+//   - content script / WebView page: relative paths resolve to the game origin;
+//   - service worker (no page origin): we prefix the absolute origin and send
+//     credentials, so the extension's host permission attaches the cookies.
+// All contracts verified live on 2026-07-15 (see docs/recon.md).
+
+const WMC_ORIGIN = "https://www.wiki-masters.com";
+// In a page already on the game, use relative (same-origin). Elsewhere (SW),
+// use the absolute origin.
+const WMC_BASE =
+  typeof location !== "undefined" && /wiki-masters\.com$/.test(location.hostname) ? "" : WMC_ORIGIN;
 
 const WMC_API = {
   async get(path) {
-    const res = await fetch(path, { headers: { accept: "application/json" } });
+    const res = await fetch(WMC_BASE + path, {
+      headers: { accept: "application/json" },
+      credentials: "include",
+    });
     if (!res.ok) throw new Error(`${path} -> ${res.status}`);
     return res.json();
   },
   async post(path, body) {
-    const res = await fetch(path, {
+    const res = await fetch(WMC_BASE + path, {
       method: "POST",
       headers: { "content-type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(body),
     });
     return { ok: res.ok, status: res.status, data: await res.json().catch(() => null) };
@@ -44,6 +57,9 @@ const WMC_API = {
   guildHome: () => WMC_API.get("/api/guilds/home"), // { guild, wishlist:[...], leaderboard }
   contest: () => WMC_API.get("/api/contest"),
 
-  // Actions (verified)
+  // Actions (verified live)
   bid: (auctionId, amount) => WMC_API.post(`/api/marketplace/${auctionId}/bid`, { amount }),
+  openPack: () => WMC_API.post("/api/packs/open", {}), // -> { cards:[5], packs_remaining } | 403 { next_regen_at }
+  listCard: (cardId, baseAmount, durationMinutes) =>
+    WMC_API.post("/api/marketplace", { card_id: cardId, base_amount: baseAmount, duration_minutes: durationMinutes }),
 };

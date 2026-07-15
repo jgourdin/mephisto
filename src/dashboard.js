@@ -60,23 +60,24 @@
   // In-panel toggles: read/write chrome.storage.local (shared with the rest of
   // the extension) so you never need the toolbar popup.
   const CONTROLS = [
+    { k: "myUsername", label: "Mon pseudo", text: true },
     { k: "enabled", label: "Automation active", cls: "kill" },
     { k: "dryRun", label: "Dry-run (simule)", cls: "dry" },
     { k: "autoOpen", label: "Auto-open paquets" },
-    { k: "marketWatch", label: "Veille marché" },
-    { k: "autoBid", label: "Auto-bid" },
+    { k: "autoBid", label: "Auto-bid (SR+)" },
     { k: "maxBidWb", label: "Mise max (WB)", num: true },
     { k: "dailySpendCapWb", label: "Plafond dépense/jour", num: true },
-    { k: "guildWatch", label: "Veille wishlist" },
-    { k: "autoGift", label: "Auto-don (1/jour)" },
+    { k: "autoSell", label: "Auto-sell (flip)" },
+    { k: "sellStartWb", label: "Prix de vente (WB)", num: true },
   ];
 
   function controlsHtml(cfg) {
     const rows = CONTROLS.map((c) => {
       const cls = c.cls ? ` class="${c.cls}"` : "";
-      const input = c.num
-        ? `<input type="number" min="0" data-k="${c.k}" value="${num0(cfg[c.k])}">`
-        : `<input type="checkbox" data-k="${c.k}"${cfg[c.k] ? " checked" : ""}>`;
+      let input;
+      if (c.text) input = `<input type="text" data-k="${c.k}" value="${esc(cfg[c.k])}" placeholder="ton pseudo">`;
+      else if (c.num) input = `<input type="number" min="0" data-k="${c.k}" value="${num0(cfg[c.k])}">`;
+      else input = `<input type="checkbox" data-k="${c.k}"${cfg[c.k] ? " checked" : ""}>`;
       return `<label${cls}>${c.label} ${input}</label>`;
     }).join("");
     return `<div class="ctrls">${rows}</div>`;
@@ -86,7 +87,19 @@
   function wireControls(p) {
     p.querySelectorAll("[data-k]").forEach((input) => {
       input.addEventListener("change", () => {
-        const v = input.type === "checkbox" ? input.checked : Number(input.value);
+        // Block going live (dry-run OFF) without a pseudo.
+        if (input.dataset.k === "dryRun" && input.checked === false) {
+          const pseudo = (p.querySelector('[data-k="myUsername"]')?.value || "").trim();
+          if (!pseudo) {
+            input.checked = true;
+            wmcToast("Pseudo requis", "Renseigne ton pseudo avant de désactiver le dry-run.");
+            return;
+          }
+        }
+        let v;
+        if (input.type === "checkbox") v = input.checked;
+        else if (input.type === "number") v = Number(input.value);
+        else v = input.value; // text (e.g. pseudo)
         chrome.storage.local.set({ [input.dataset.k]: v });
       });
     });
