@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: system-ui, sans-serif; width: 270px; margin: 0; padding: 12px; }
+      h1 { font-size: 14px; margin: 0 0 10px; }
+      label { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; }
+      input[type="number"], input[type="text"] { width: 70px; }
+      .section { border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px; }
+      .kill { color: #dc2626; font-weight: 600; }
+      .dry { color: #b45309; font-weight: 600; }
+      .hint { font-size: 11px; color: #666; margin: 4px 0 0; }
+      .tagline { font-size: 11px; color: #7c3aed; font-style: italic; margin: -6px 0 8px; }
+      button.link { width: 100%; margin-top: 10px; padding: 6px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <h1><img src="../icons/icon48.png" alt="" style="width:22px;height:22px;border-radius:5px;vertical-align:-5px;margin-right:6px" />Méphisto</h1>
+    <p class="tagline">« Le diable est dans les enchères. »</p>
+
+    <label class="kill">Automation active <input type="checkbox" id="enabled" /></label>
+    <label class="dry">Mode dry-run <input type="checkbox" id="dryRun" /></label>
+    <p class="hint">Dry-run = simule les actions (mise/don) sans les exécuter. Automation décochée = observation seule.</p>
+
+    <div class="section">
+      <label>Pack timer (notifs) <input type="checkbox" id="packTimer" /></label>
+      <label>Auto-open paquets <input type="checkbox" id="autoOpen" /></label>
+    </div>
+
+    <div class="section">
+      <label>Veille marché <input type="checkbox" id="marketWatch" /></label>
+      <label>Auto-bid <input type="checkbox" id="autoBid" /></label>
+      <label>Mise max (WB) <input type="number" id="maxBidWb" min="1" /></label>
+      <label>Plafond dépense/jour <input type="number" id="dailySpendCapWb" min="0" /></label>
+    </div>
+
+    <div class="section">
+      <label>Veille wishlist guilde <input type="checkbox" id="guildWatch" /></label>
+      <label>Auto-don (1/jour) <input type="checkbox" id="autoGift" /></label>
+    </div>
+
+    <div class="section">
+      <label>Mon pseudo <input type="text" id="myUsername" size="10" placeholder="ton pseudo" /></label>
+      <p class="hint">Ton pseudo WikiMasters — pour ne pas enchérir sur tes propres ventes.</p>
+    </div>
+
+    <button class="link" id="openDashboard">Ouvrir le dashboard</button>
+    <p class="hint">L'auto-bid ne mise jamais sous 15 s restantes (anti-snipe +60 s), max 1 mise / 90 s. Les endpoints de vente/don s'apprennent à ta 1re action manuelle.</p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

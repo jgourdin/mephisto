@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "Méphisto — pacte pour WikiMasters",
+  "version": "0.2.0",
+  "description": "Le démon des enchères de wiki-masters.com : pack timer, auto-open, veille marché avec historique de prix, wishlist guilde, dashboard. Usage personnel / apprentissage. « Le diable est dans les enchères. »",
+  "permissions": ["alarms", "notifications", "storage", "unlimitedStorage"],
+  "host_permissions": ["https://www.wiki-masters.com/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.wiki-masters.com/*"],
+      "js": ["src/net-sniffer.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.wiki-masters.com/*"],
+      "js": [
+        "src/config.js",
+        "src/db.js",
+        "src/api.js",
+        "src/analysis.js",
+        "src/relay.js",
+        "src/pulls.js",
+        "src/marketplace.js",
+        "src/guild.js",
+        "src/dashboard.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "Méphisto",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png"],
+      "matches": ["https://www.wiki-masters.com/*"]
+    }
+  ]
+}

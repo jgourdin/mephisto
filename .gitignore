@@ -1,0 +1,4 @@
+.DS_Store
+node_modules/
+# Internal reverse-engineering notes — kept local, never published
+docs/recon.md
