@@ -46,7 +46,7 @@ const WMC_ENGINE = (() => {
     auctionsCache = { at: Date.now(), list: auctions };
     if (typeof WMC_DB !== "undefined") {
       const now = Date.now();
-      for (const a of auctions) WMC_DB.recordAuction(a, now);
+      for (const a of auctions) WMC_DB.recordAuction(a, now); // price history for the dashboard
     }
     return auctions;
   }
@@ -186,6 +186,15 @@ const WMC_ENGINE = (() => {
     if ((mine.selling || []).length >= (cfg.sellSlotMax ?? 5)) return; // no free slot
 
     const listed = new Set((mine.selling || []).map((a) => a.card?.id ?? a.card_id));
+    // What we actually paid, from our won auctions (final_price) — so we list a
+    // bit above cost (never at a loss). A low base still triggers the bidding war
+    // that lifts the final price.
+    const paidFor = {};
+    for (const a of mine.won || []) {
+      const id = a.card?.id ?? a.card_id;
+      const p = a.final_price ?? a.current_bid;
+      if (id && p != null) paidFor[id] = Math.min(paidFor[id] ?? Infinity, p);
+    }
     const { cards } = await WMC_API.ownedCards().catch(() => ({ cards: [] }));
     const candidates = cards.filter(
       (c) =>
@@ -194,10 +203,15 @@ const WMC_ENGINE = (() => {
         !listed.has(c.id)
     );
     if (!candidates.length) return;
-    // Pick a random card among all UR/SR candidates (no rarity priority), and vary
-    // the price a bit so listings aren't carbon copies.
+    // Random pick among all UR/SR candidates (no rarity priority).
     const card = pickOne(candidates);
-    const price = Math.max(1, Math.round(cfg.sellStartWb * rnd(0.85, 1.2)));
+    // A bit above what we paid when we know it (≈ +15%, min +1) so we never list
+    // below cost; otherwise a low default base, slightly varied.
+    const paid = paidFor[card.id];
+    const price =
+      paid != null
+        ? Math.max(paid + 1, Math.round(paid * 1.15))
+        : Math.max(1, Math.round(cfg.sellStartWb * rnd(0.85, 1.2)));
 
     if (isDry(cfg)) {
       wmcNotify("😈 Illusion (dry-run)", `Aurait mis en vente ${card.wikipedia_title} (${card.rarity}) à ${price} WB.`);
