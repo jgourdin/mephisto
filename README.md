@@ -8,6 +8,24 @@
 
 Extension Chrome (MV3) perso pour [wiki-masters.com](https://www.wiki-masters.com) — projet d'apprentissage/fun : le démon des bonnes affaires qui automatise les corvées du jeu et lit l'avenir des prix, sans tricher en bataille. Ton compte, ton âme, ses conseils cyniques.
 
+## Sommaire
+
+- [Avertissement](#avertissement)
+- [Architecture](#architecture)
+- [Features](#features)
+- [Endpoints appris automatiquement](#endpoints-appris-automatiquement)
+- [Garde-fous](#garde-fous)
+- [Installation (extension, ordinateur)](#installation)
+- [App Android (APK)](#app-android)
+- [Structure du projet](#structure)
+- [Notes](#notes)
+
+## Avertissement
+
+⚠️ Projet **personnel, non officiel et à but d'apprentissage** uniquement. Méphisto n'est **ni affilié, ni approuvé, ni soutenu** par WikiMasters / WOKcraft ni par aucun de ses ayants droit ; « WikiMasters » et les marques associées appartiennent à leurs propriétaires respectifs et ne sont cités que pour décrire la compatibilité.
+
+Automatiser un compte peut enfreindre les conditions d'utilisation du jeu et **entraîner la suspension ou le bannissement du compte**. Utilisez ce logiciel **à vos propres risques** : vous êtes seul responsable du respect des CGU du jeu et des lois applicables. Le logiciel est fourni « **EN L'ÉTAT** », sans aucune garantie ni responsabilité de l'auteur pour tout dommage (voir [LICENSE](LICENSE)). Aucune donnée n'est collectée ni transmise à un tiers : tout reste local à ton navigateur/appareil.
+
 ## Architecture
 
 Deux briques :
@@ -59,9 +77,30 @@ Il faut un navigateur **basé sur Chrome sur ordinateur** (Chrome, Arc, Brave, E
 
 ### Mobile ?
 
-- **iOS** : non — tous les navigateurs y sont bridés sur WebKit, pas d'extensions Chrome.
-- **Android** : possible via un navigateur Chromium qui accepte les extensions. Kiwi Browser (la référence historique) a fermé début 2025 ; alternatives maintenues en 2026 : **Quetta** ou **Lemur** (installent depuis le Chrome Web Store ou un zip). Chrome/Arc mobile ne supportent pas les extensions.
-- **Ordinateur** : le cas nominal, pleinement supporté.
+- **Android** : une **app dédiée** (APK) est fournie — voir ci-dessous. Alternative sans app : un navigateur Chromium qui accepte les extensions (**Quetta** ou **Lemur** ; Kiwi Browser a fermé début 2025). Chrome/Arc mobile ne supportent pas les extensions.
+- **iOS** : non — tous les navigateurs y sont bridés sur WebKit, ni extensions ni app WebView réaliste.
+
+## App Android
+
+_Alternative à l'extension, pour jouer sur Android._ Une app qui charge le jeu dans une WebView et **injecte le même code que l'extension** (`android/tools/build-companion.mjs` regénère le bundle depuis `src/` — logique single-source). La session vit dans l'app → l'accès API reste identique, auto-open/auto-bid fonctionnent. Pas de service d'accessibilité, pas de navigateur tiers.
+
+### Installer l'APK sur Android
+
+1. Depuis ton téléphone, ouvre la [dernière release](https://github.com/jgourdin/mephisto/releases/latest) et télécharge le fichier **`mephisto-vX.Y.Z.apk`**.
+2. Ouvre le fichier téléchargé (via la notification ou l'appli **Fichiers** → Téléchargements).
+3. Android affiche « Pour votre sécurité… installation bloquée » → appuie sur **Paramètres** et **autorise « cette source »** (l'appli depuis laquelle tu ouvres l'APK, ex. Chrome ou Fichiers).
+4. Reviens en arrière et appuie sur **Installer**. Google Play Protect peut avertir (« appli inconnue ») → **Installer quand même**.
+5. Ouvre **Méphisto**, autorise les **notifications** au 1er lancement.
+6. **Connecte-toi** avec ton **email + mot de passe** WikiMasters (voir note login ci-dessous).
+7. Sur le jeu, le bouton **Méphisto en bas à droite** (logo du démon) ouvre le dashboard et ses réglages. Tout est **désactivé par défaut** ; laisse **« Dry-run »** coché pour tester sans agir.
+
+> **Login** : email + mot de passe uniquement. Le bouton « Se connecter avec Google » est **bloqué par Google dans les WebView** — utilise l'email/mot de passe.
+> **Fonctionnement** : l'app automatise **quand elle est ouverte au premier plan** (Android gèle les apps en arrière-plan). Ce n'est pas un farmer écran éteint.
+
+### Construire l'APK
+
+- **Automatique (CI)** : pousse un tag `v*` → GitHub Actions (`.github/workflows/android.yml`) régénère le bundle, compile l'APK et l'**attache à la release** (avec le zip de l'extension).
+- **Local** : `node android/tools/build-companion.mjs` puis `cd android && ./gradlew assembleDebug` (JDK 17 + SDK Android requis). APK dans `android/app/build/outputs/apk/debug/`. Le projet s'ouvre aussi dans Android Studio.
 
 ## Structure
 

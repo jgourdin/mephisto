@@ -1,0 +1,52 @@
+name: Build Android APK
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: # allow manual runs (produces an artifact, no release)
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Regenerate the WebView JS bundle from the extension source (single source of truth).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Generate companion.js
+        run: node android/tools/build-companion.mjs
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Stage artifacts
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk "mephisto-${GITHUB_REF_NAME}.apk"
+          zip -r "mephisto-extension.zip" manifest.json src icons README.md -x '*.DS_Store'
+
+      - name: Upload APK artifact (manual runs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mephisto-apk
+          path: mephisto-*.apk
+
+      - name: Attach to release (tag pushes)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            mephisto-*.apk
+            mephisto-extension.zip
