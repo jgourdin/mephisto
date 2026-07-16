@@ -26,6 +26,8 @@
     #wmc-panel .ctrls .kill{color:#f87171;font-weight:600}
     #wmc-panel .ctrls .dry{color:#fbbf24;font-weight:600}
     #wmc-panel .tag{color:#a78bfa;font-style:italic;margin:0 0 8px}
+    #wmc-panel button#wmc-export-target{margin-top:6px;width:100%;padding:6px;border:none;border-radius:8px;
+      background:#4c1d95;color:#e5e7eb;font:12px system-ui,sans-serif;cursor:pointer}
   `;
 
   const iconUrl = chrome.runtime.getURL("icons/icon128.png");
@@ -69,6 +71,7 @@
     { k: "dailySpendCapWb", label: "Plafond dépense/jour", num: true },
     { k: "autoSell", label: "Auto-sell (flip)" },
     { k: "sellStartWb", label: "Prix de vente (WB)", num: true },
+    { k: "targetPlayer", label: "Cible (surveiller)", text: true },
   ];
 
   function controlsHtml(cfg) {
@@ -103,6 +106,23 @@
         chrome.storage.local.set({ [input.dataset.k]: v });
       });
     });
+
+    const exportBtn = p.querySelector("#wmc-export-target");
+    if (exportBtn)
+      exportBtn.addEventListener("click", async () => {
+        const target = (p.querySelector('[data-k="targetPlayer"]')?.value || "").trim();
+        if (!target) return wmcToast("Cible", "Renseigne d'abord un pseudo à surveiller.");
+        const data = await WMC_DB.exportTarget(target);
+        if (!data.length) return wmcToast("Cible", `Aucune action loggée pour ${target} (laisse tourner un peu).`);
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `mephisto-target-${target}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        wmcToast("Export", `${data.length} action(s) exportée(s) pour ${target}.`);
+      });
   }
 
   const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -119,6 +139,8 @@
     const medians = {};
     for (const r of RARITIES) medians[r] = await WMC_DB.medianPriceByRarity(r);
     const pulls = await WMC_DB.pullStats();
+    const targetName = (cfg.targetPlayer || "").trim();
+    const targetCount = targetName ? await WMC_DB.targetCount(targetName).catch(() => 0) : 0;
     const cards = owned.cards || [];
     const deck = WMC_ANALYSIS.bestDeck(cards, "tank");
     const attackers = WMC_ANALYSIS.attackRanking(cards, 5);
@@ -174,6 +196,10 @@
         <tr><td>Âmes collectionnées</td><td class="r">${cards.length}</td></tr>
         <tr><td>Guilde</td><td class="r">${esc(guild?.guild?.name || "—")} · #${guild?.leaderboard?.rank ?? "—"}</td></tr>
       </table>
+
+      <h3>Cible surveillée</h3>
+      <p class="muted">${targetName ? `${esc(targetName)} — ${targetCount} action(s) loggée(s)` : "Renseigne un pseudo dans « Cible » ci-dessus."}</p>
+      <button id="wmc-export-target">Exporter JSON</button>
 
       <h3>Âmes à corrompre (wishlist)</h3>
       <table>${matchRows}</table>

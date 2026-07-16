@@ -117,6 +117,19 @@ const WMC_ENGINE = (() => {
   // yourself). No pseudo => forced dry-run, whatever cfg.dryRun says.
   const isDry = (cfg) => cfg.dryRun || !(cfg.myUsername || "").trim();
 
+  // Guild mates by username — cached ~10 min. We never bid on their listings and
+  // never outbid them. is_self is dropped so we don't match ourselves.
+  let guildCache = { at: 0, set: new Set() };
+  async function guildmates() {
+    if (Date.now() - guildCache.at < 600_000) return guildCache.set;
+    const { members = [] } = await WMC_API.guildMembers().catch(() => ({}));
+    guildCache = {
+      at: Date.now(),
+      set: new Set(members.filter((m) => !m.is_self).map((m) => m.profile?.username).filter(Boolean)),
+    };
+    return guildCache.set;
+  }
+
   // ---------- endgame sniper ----------
   // With anti-snipe, a bid under ~11 s left bumps the timer by ~1 min, so an
   // auction is only ever decided in its final seconds. Bidding the instant you're
@@ -136,6 +149,7 @@ const WMC_ENGINE = (() => {
     if (running || Date.now() < backoffUntil) return;
     if (isDry(cfg)) return; // no pseudo / dry-run → observe only
     const me = cfg.myUsername;
+    const mates = cfg.spareGuildmates ? await guildmates() : new Set();
     // Cheap scan off the shared cache — end_at is stable, so seconds-left is
     // accurate even from a slightly old snapshot.
     const inWindow = (await getAuctions()).filter(
@@ -144,6 +158,8 @@ const WMC_ENGINE = (() => {
         cfg.targetRarities.includes(a.card?.rarity) &&
         a.seller?.username !== me &&
         a.current_bidder?.username !== me && // not already leading
+        !mates.has(a.seller?.username) && // never bid on a guildmate's listing
+        !mates.has(a.current_bidder?.username) && // never outbid a guildmate
         nextBidOf(a) <= cfg.maxBidWb &&
         secondsLeft(a) >= SNIPE_MIN &&
         secondsLeft(a) <= SNIPE_MAX
@@ -157,6 +173,7 @@ const WMC_ENGINE = (() => {
     // right moment and skip the stale-price 409 entirely.
     const a = (await WMC_API.auctionOne(pick.id).catch(() => null))?.auction;
     if (!a || a.status !== "active" || a.current_bidder?.username === me) return;
+    if (mates.has(a.seller?.username) || mates.has(a.current_bidder?.username)) return; // a guildmate stepped in
     const sl = secondsLeft(a);
     if (sl < SNIPE_MIN || sl > SNIPE_MAX) return; // timing moved — catch it next tick
     const amount = nextBidOf(a);
@@ -225,6 +242,45 @@ const WMC_ENGINE = (() => {
     if (res.ok) wmcNotify("😈 Carte en vente", `${card.wikipedia_title} (${card.rarity}) listée à ${price} WB.`);
   }
 
+  // ---------- target watch ----------
+  // Observe one player's market moves (their listings + their bids, with amounts
+  // and timing) and stash them in the DB, deduped, for JSON export/analysis.
+  // Only runs where we can store (content-script DB present) and stays gentle:
+  // a few single-auction reads per pass, spaced out.
+  async function watchTarget(cfg) {
+    if (typeof WMC_DB === "undefined") return; // no DB in this context (e.g. service worker)
+    const target = (cfg.targetPlayer || "").trim();
+    if (!target) return;
+    const involved = (await getAuctions()).filter(
+      (a) => a.seller?.username === target || a.current_bidder?.username === target
+    );
+    if (!involved.length) return;
+    const rows = [];
+    const now = Date.now();
+    for (const a of involved.slice(0, 6)) {
+      const base = {
+        user: target,
+        auctionId: a.id,
+        cardId: a.card?.id ?? a.card_id,
+        title: a.card?.wikipedia_title,
+        rarity: a.card?.rarity ?? a.snapshot_rarity,
+        atk: a.snapshot_atk,
+        def: a.snapshot_def,
+        endAt: a.end_at,
+      };
+      if (a.seller?.username === target) {
+        rows.push({ ...base, key: `l:${a.id}`, type: "listing", baseAmount: a.base_amount, currentBid: a.current_bid, at: now });
+      }
+      const one = await WMC_API.auctionOne(a.id).catch(() => null);
+      for (const b of one?.bids || []) {
+        if (b.bidder?.username !== target) continue;
+        rows.push({ ...base, key: `b:${b.id}`, type: "bid", amount: b.amount, placedAt: b.placed_at, at: new Date(b.placed_at).getTime() || now });
+      }
+      await sleep(rnd(300, 800)); // space out the single-auction reads
+    }
+    if (rows.length) await WMC_DB.recordTargetObs(rows);
+  }
+
   // ---------- one full cycle ----------
   async function runCycle() {
     if (running || Date.now() < backoffUntil) return; // no overlap, respect back-off
@@ -234,7 +290,7 @@ const WMC_ENGINE = (() => {
     try {
       // Shuffle the job order and occasionally skip one — humans aren't tidy.
       // Bidding is NOT here — it's the endgame sniper on its own fast timer.
-      const jobs = shuffle([() => openPacks(cfg), () => autoSell(cfg)]);
+      const jobs = shuffle([() => openPacks(cfg), () => autoSell(cfg), () => watchTarget(cfg)]);
       for (const job of jobs) {
         if (chance(0.15)) continue;
         await job();

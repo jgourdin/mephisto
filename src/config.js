@@ -36,6 +36,10 @@ const WMC_DEFAULTS = {
   // --- Guild wishlist ---
   guildWatch: false, // notify when you can gift a wishlist card
   autoGift: false, // auto-gift the top match once/day (uses learned endpoint)
+  spareGuildmates: true, // never bid on a guildmate's listing, and never outbid a guildmate
+
+  // --- Target watch (log one player's market moves for export/analysis) ---
+  targetPlayer: "", // username to monitor; empty = off
 
   // --- Cadence / politeness ---
   tickMinutes: 1, // service-worker alarm period (min 1 min in MV3)

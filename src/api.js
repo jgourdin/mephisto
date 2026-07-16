@@ -56,6 +56,7 @@ const WMC_API = {
   auctionOne: (auctionId) => WMC_API.get(`/api/marketplace/${auctionId}`), // { auction:{...}, bids:[...] } — freshest single price
   myMarket: () => WMC_API.get("/api/marketplace/mine"), // { selling:[], bidding:[] }
   guildHome: () => WMC_API.get("/api/guilds/home"), // { guild, wishlist:[...], leaderboard }
+  guildMembers: () => WMC_API.get("/api/guilds/members"), // { members: [{ profile:{username}, role, is_self }] }
   contest: () => WMC_API.get("/api/contest"),
 
   // Actions (verified live)

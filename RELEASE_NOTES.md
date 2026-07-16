@@ -1,20 +1,25 @@
-# 😈 Méphisto v0.5.1
+# 😈 Méphisto v0.6.0
 
-Patch de la v0.5.0 — l'auto-sell vend enfin.
+Deux nouveautés : on épargne la guilde, et on espionne la concurrence.
 
-## Amélioré
+## Nouveautés
 
-- 💰 **Prix de vente intelligent** — les mises en vente démarrent **juste au-dessus de ton prix d'achat** (≈ +15 %, jamais à perte) au lieu d'un prix fixe trop haut qui restait invendu. Une **base basse** déclenche la guerre d'enchères qui fait monter le prix ; une base haute reste ignorée (données marché : les enchères qui reçoivent des offres démarrent ~10 WB, celles qui meurent ~99). Base de repli abaissée à ~5 WB pour les cartes dont on ne connaît plus le coût.
+- 🛡️ **On épargne la guilde** — Méphisto ne mise plus jamais sur une enchère **vendue par un membre de ta guilde**, et ne **surenchérit jamais contre un co-membre** déjà en tête. Récupéré automatiquement depuis ta guilde, activé par défaut (réglable).
+- 🎯 **Cible surveillée** — renseigne un pseudo dans le panneau 😈 et Méphisto logge discrètement toutes les actions de ce joueur sur le marché : ses **mises et ses ventes**, avec montants, timing et stats des cartes. Bouton **Exporter JSON** pour tout télécharger et étudier sa stratégie hors-ligne. Tourne en observation pure (dry-run) sans rien miser.
 
-Le reste de la v0.5.0 est inclus : sniper de fin de partie, plafond de dépense par solde, moteur en arrière-plan, achats **SR et +**, ventes **UR/SR** au hasard (jamais les Légendaires ni les favoris ★), Firefox + Android.
+Inclut tout le reste : sniper de fin de partie, prix de vente juste au-dessus du coût, plafond de dépense par solde, achats **SR et +**, ventes **UR/SR** (jamais les Légendaires ni les favoris ★), Firefox + Android.
 
 ## Installer
 
 - **Chrome / Arc / Brave / Edge** : télécharge `mephisto-extension.zip`, décompresse, `chrome://extensions` → Mode développeur → « Charger l'extension non empaquetée ».
 - **Firefox** : `mephisto-firefox.zip` → `about:debugging` → « Charger un module temporaire » (ou signé via AMO pour du permanent).
-- **Android** : `mephisto-v0.5.1.apk` → ouvrir sur le téléphone → autoriser la source.
+- **Android** : `mephisto-v0.6.0.apk` → ouvrir sur le téléphone → autoriser la source.
 
 Procédures détaillées dans le [README](https://github.com/jgourdin/mephisto#installation).
+
+## Pour démarrer
+
+Renseigne **ton pseudo** dans le panneau 😈, laisse **Dry-run** coché pour observer, puis décoche pour passer en réel. Le sniper tourne tant que l'onglet du jeu est ouvert.
 
 ## ⚠️ Avertissement
 

@@ -7,7 +7,7 @@
 
 const WMC_DB = (() => {
   const NAME = "wmc";
-  const VERSION = 1;
+  const VERSION = 2;
   let dbp = null;
 
   function open() {
@@ -35,6 +35,12 @@ const WMC_DB = (() => {
         // Endpoints learned by the network sniffer (POST routes + payload shape).
         if (!db.objectStoreNames.contains("endpoints")) {
           db.createObjectStore("endpoints", { keyPath: "name" });
+        }
+        // Target-watch: a monitored player's market moves (one row per bid /
+        // per listing, key-deduped), indexed by username for export.
+        if (!db.objectStoreNames.contains("target_obs")) {
+          const s = db.createObjectStore("target_obs", { keyPath: "key" });
+          s.createIndex("user", "user");
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -112,6 +118,20 @@ const WMC_DB = (() => {
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
+    },
+
+    // Target-watch: dedup-store a monitored player's observed market actions,
+    // then export/count them by username for offline strategy analysis.
+    async recordTargetObs(rows) {
+      if (!rows?.length) return;
+      await tx("target_obs", "readwrite", (s) => rows.forEach((r) => s.put(r)));
+    },
+    async exportTarget(user) {
+      const rows = await getAll("target_obs", user ? "user" : undefined, user || undefined).catch(() => []);
+      return rows.sort((a, b) => (a.at || 0) - (b.at || 0));
+    },
+    async targetCount(user) {
+      return (await this.exportTarget(user)).length;
     },
 
     // Median observed bid for a rarity (proxy for "fair price").
