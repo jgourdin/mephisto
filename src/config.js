@@ -51,6 +51,14 @@ const WMC_DEFAULTS = {
   // --- Target watch (log players' market moves for export/analysis) ---
   targetPlayer: "", // username(s) to monitor, comma/space-separated; empty = off
 
+  // --- Interest targeting (ciblage par thèmes, dynamique par utilisateur) ---
+  interestWatch: false, // surligne/notifie au marché les cartes on-theme
+  interestAutoBid: false, // priorité auto-bid on-theme (dans les plafonds)
+  interestAutoTag: false, // auto-étiquette les cartes possédées (respecte dryRun)
+  interestProtectSell: true, // ne jamais auto-vendre/défausser une carte on-theme
+  interestBidBonus: 20, // WB ajoutés au plafond d'une carte on-theme, borné par maxBidWb
+  vocabTtlDays: 90, // durée de cache du vocabulaire rimessolides par étiquette
+
   // --- Cadence / politeness ---
   tickMinutes: 1, // service-worker alarm period (min 1 min in MV3)
   scanIntervalMs: 45_000, // in-page fallback loop (mobile WebView)
