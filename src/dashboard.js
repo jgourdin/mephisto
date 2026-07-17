@@ -143,7 +143,7 @@
     );
   }
 
-  const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   async function render() {
     const cfg = await new Promise((r) => chrome.storage.local.get(WMC_DEFAULTS, r));
@@ -186,10 +186,11 @@
       themeSection = tags
         .map((t) => {
           const v = vocabByTag[t.id] || { words: [] };
+          const safeColor = /^#[0-9a-f]{6}$/i.test(t.color || "") ? t.color : "#334155";
           const chips = v.words.slice(0, 40)
             .map((w) => `<span class="kw" data-tag="${esc(t.name)}" data-w="${esc(w)}" title="Cliquer pour retirer">${esc(w)}×</span>`)
             .join(" ");
-          return `<tr><td><span class="pill" style="background:${t.color}22;color:${t.color}">${esc(t.name)}</span></td><td class="r">${counts[t.id] || 0}</td></tr>
+          return `<tr><td><span class="pill" style="background:${safeColor}22;color:${safeColor}">${esc(t.name)}</span></td><td class="r">${counts[t.id] || 0}</td></tr>
                   <tr><td colspan="2" class="kws">${chips || '<span class="muted">vocabulaire en cours…</span>'}</td></tr>`;
         })
         .join("");

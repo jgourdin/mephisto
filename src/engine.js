@@ -214,10 +214,11 @@ const WMC_ENGINE = (() => {
     const inWindow = [];
     for (const a of candidates) {
       const meta = await cardMeta(a.card);
-      if (nextBidOf(a) <= willingToPay(a.card, meta, cfg, onThemeTags(a.card, meta, vocab).length > 0)) inWindow.push(a);
+      a.__onTheme = onThemeTags(a.card, meta, vocab).length > 0;
+      if (nextBidOf(a) <= willingToPay(a.card, meta, cfg, a.__onTheme)) inWindow.push(a);
     }
     if (!inWindow.length) return;
-    const themed = (a) => (cfg.interestAutoBid && onThemeTags(a.card, null, vocab).length ? 0 : 1);
+    const themed = (a) => (cfg.interestAutoBid && a.__onTheme ? 0 : 1);
     inWindow.sort((x, y) => themed(x) - themed(y) || secondsLeft(x) - secondsLeft(y));
     const pick = inWindow[0];
 
@@ -251,6 +252,9 @@ const WMC_ENGINE = (() => {
     if (!cfg.autoSell) return;
     const { wmcLastSellAt } = await store.get({ wmcLastSellAt: 0 });
     if (Date.now() - wmcLastSellAt < (cfg.bidCooldownMs ?? 20_000)) return;
+    // Protection on-theme impossible à évaluer hors du content-script (ex. service
+    // worker : pas de modules interest ni de document/cookies) -> on ne vend pas.
+    if (cfg.interestProtectSell && (typeof WMC_INTEREST === "undefined" || typeof WMC_TAGSYNC === "undefined" || typeof document === "undefined")) return;
 
     const mine = await WMC_API.myMarket().catch(() => null);
     if (!mine) return;
@@ -287,13 +291,20 @@ const WMC_ENGINE = (() => {
     const rank = { UR: 0, SR: 1 };
     const stat = (c) => (c.atk || 0) + (c.def || 0);
     const vocab = cfg.interestProtectSell ? await interestVocab(cfg) : { compiled: [] };
-    const candidates = cards.filter(
+    let candidates = cards.filter(
       (c) =>
         cfg.sellRarities.includes(c.rarity) && // UR/SR only — never Legendaries
         !(cfg.sellSkipStarred && c.starred) && // keep favourites
-        !(cfg.interestProtectSell && onThemeTags(c, null, vocab).length) && // protège le on-theme
         !listed.has(c.id)
     );
+    if (cfg.interestProtectSell && vocab.compiled.length) {
+      const kept = [];
+      for (const c of candidates) {
+        const meta = await cardMeta(c);
+        if (!onThemeTags(c, meta, vocab).length) kept.push(c); // protège le on-theme
+      }
+      candidates = kept;
+    }
     if (!candidates.length) return;
 
     // Strategy — "B" = new (highest value first: UR then top battle stats, UR listed
@@ -462,9 +473,13 @@ const WMC_ENGINE = (() => {
     if (!cfg.interestWatch) return;
     const vocab = await interestVocab(cfg);
     if (!vocab.compiled.length) return;
-    const hits = (await getAuctions().catch(() => []))
-      .filter((a) => a.status === "active" && cfg.targetRarities.includes(a.card?.rarity))
-      .filter((a) => onThemeTags(a.card, null, vocab).length);
+    const active = (await getAuctions().catch(() => []))
+      .filter((a) => a.status === "active" && cfg.targetRarities.includes(a.card?.rarity));
+    const hits = [];
+    for (const a of active) {
+      const meta = await cardMeta(a.card);
+      if (onThemeTags(a.card, meta, vocab).length) hits.push(a);
+    }
     if (!hits.length) return;
     const { wmcInterestSeen = {} } = await store.get({ wmcInterestSeen: {} });
     const fresh = hits.filter((a) => !wmcInterestSeen[a.id]);
