@@ -23,6 +23,7 @@
         "src/api.js",
         "src/analysis.js",
         "src/value.js",
+        "src/interest.js",
         "src/enrich.js",
         "src/engine.js",
         "src/driver.js",
