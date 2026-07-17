@@ -4,7 +4,7 @@
   "version": "0.8.0",
   "description": "Le démon des enchères de wiki-masters.com : auto-open, auto-bid, auto-sell, dashboard. Usage personnel / apprentissage. « Le diable est dans les enchères. »",
   "permissions": ["storage", "unlimitedStorage", "alarms", "notifications"],
-  "host_permissions": ["https://www.wiki-masters.com/*"],
+  "host_permissions": ["https://www.wiki-masters.com/*", "https://www.rimessolides.com/*"],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -25,6 +25,7 @@
         "src/value.js",
         "src/interest.js",
         "src/enrich.js",
+        "src/lexicon.js",
         "src/engine.js",
         "src/driver.js",
         "src/dashboard.js"
