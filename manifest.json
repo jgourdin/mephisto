@@ -26,6 +26,7 @@
         "src/interest.js",
         "src/enrich.js",
         "src/lexicon.js",
+        "src/tagsync.js",
         "src/engine.js",
         "src/driver.js",
         "src/dashboard.js"
