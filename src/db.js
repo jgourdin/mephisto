@@ -7,7 +7,7 @@
 
 const WMC_DB = (() => {
   const NAME = "wmc";
-  const VERSION = 4;
+  const VERSION = 5;
   let dbp = null;
 
   function open() {
@@ -53,6 +53,11 @@ const WMC_DB = (() => {
         // Wikipedia API, cached here so value.js can read it synchronously.
         if (!db.objectStoreNames.contains("card_meta")) {
           db.createObjectStore("card_meta", { keyPath: "title" });
+        }
+        // Vocabulaire de matching par étiquette (mots rimessolides ∪ nom, filtrés,
+        // moins les mots retirés par l'utilisateur) + horodatage de cache.
+        if (!db.objectStoreNames.contains("interest_vocab")) {
+          db.createObjectStore("interest_vocab", { keyPath: "name" });
         }
         // Real clearing prices of settled auctions (title + rarity + final), so we
         // can anchor value on what the market actually pays, not on pageviews.
@@ -218,6 +223,23 @@ const WMC_DB = (() => {
     },
     async allCardMeta() {
       return getAll("card_meta").catch(() => []);
+    },
+
+    async getVocab(name) {
+      if (!name) return null;
+      const db = await open();
+      return new Promise((resolve) => {
+        const req = db.transaction("interest_vocab", "readonly").objectStore("interest_vocab").get(name);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    },
+    async putVocab(row) {
+      if (!row || !row.name) return;
+      await tx("interest_vocab", "readwrite", (s) => s.put({ fetchedAt: Date.now(), removed: [], words: [], ...row }));
+    },
+    async allVocab() {
+      return getAll("interest_vocab").catch(() => []);
     },
 
     // Real clearing prices of settled-sold auctions, for market-anchored value.
