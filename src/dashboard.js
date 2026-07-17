@@ -28,6 +28,9 @@
     #wmc-panel .tag{color:#a78bfa;font-style:italic;margin:0 0 8px}
     #wmc-panel button#wmc-export-target{margin-top:6px;width:100%;padding:6px;border:none;border-radius:8px;
       background:#4c1d95;color:#e5e7eb;font:12px system-ui,sans-serif;cursor:pointer}
+    #wmc-panel .kws{padding:2px 0 8px}
+    #wmc-panel .kw{display:inline-block;margin:1px;padding:0 5px;border-radius:6px;background:#1e293b;color:#94a3b8;font-size:11px;cursor:pointer}
+    #wmc-panel .kw:hover{background:#7f1d1d;color:#fecaca}
   `;
 
   const iconUrl = chrome.runtime.getURL("icons/icon128.png");
@@ -74,6 +77,11 @@
     { k: "sellAbTest", label: "Test A/B vente" },
     { k: "sellStartWb", label: "Prix de vente (WB)", num: true },
     { k: "targetPlayer", label: "Cibles (virgules)", text: true },
+    { k: "interestWatch", label: "Repérage marché (thèmes)" },
+    { k: "interestAutoBid", label: "Auto-bid prioritaire (thèmes)" },
+    { k: "interestAutoTag", label: "Auto-étiquetage (thèmes)" },
+    { k: "interestProtectSell", label: "Protéger le on-theme (vente)" },
+    { k: "interestBidBonus", label: "Bonus mise on-theme (WB)", num: true },
   ];
 
   function controlsHtml(cfg) {
@@ -125,6 +133,14 @@
         URL.revokeObjectURL(url);
         wmcToast("Export", `${data.length} action(s) exportée(s).`);
       });
+
+    p.querySelectorAll(".kw").forEach((chip) =>
+      chip.addEventListener("click", async () => {
+        await WMC_LEXICON.removeWord(chip.dataset.tag, chip.dataset.w);
+        chip.remove();
+        wmcToast("Vocabulaire", `« ${chip.dataset.w} » retiré de « ${chip.dataset.tag} ».`);
+      })
+    );
   }
 
   const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -149,6 +165,35 @@
     const urVal = (score) =>
       typeof WMC_VALUE !== "undefined" && WMC_VALUE.UR_BY_SCORE ? WMC_VALUE.UR_BY_SCORE[score] ?? "—" : "—";
     const cards = owned.cards || [];
+    let themeSection = "";
+    if (typeof WMC_TAGSYNC !== "undefined" && typeof WMC_LEXICON !== "undefined" && typeof WMC_INTEREST !== "undefined") {
+      const tags = await WMC_TAGSYNC.listTags().catch(() => []);
+      const metaByTitle = {};
+      for (const m of await WMC_DB.allCardMeta().catch(() => [])) metaByTitle[m.title] = m;
+      const built = [];
+      const vocabByTag = {};
+      for (const t of tags) {
+        const words = await WMC_LEXICON.buildVocab(t, cfg).catch(() => []);
+        vocabByTag[t.id] = { name: t.name, color: t.color, words };
+        built.push({ tagId: t.id, words });
+      }
+      const compiled = WMC_INTEREST.compileVocab(built);
+      const counts = {};
+      for (const c of cards) {
+        const meta = metaByTitle[c.wikipedia_title] || null;
+        for (const id of WMC_INTEREST.classify(c, meta, compiled)) counts[id] = (counts[id] || 0) + 1;
+      }
+      themeSection = tags
+        .map((t) => {
+          const v = vocabByTag[t.id] || { words: [] };
+          const chips = v.words.slice(0, 40)
+            .map((w) => `<span class="kw" data-tag="${esc(t.name)}" data-w="${esc(w)}" title="Cliquer pour retirer">${esc(w)}×</span>`)
+            .join(" ");
+          return `<tr><td><span class="pill" style="background:${t.color}22;color:${t.color}">${esc(t.name)}</span></td><td class="r">${counts[t.id] || 0}</td></tr>
+                  <tr><td colspan="2" class="kws">${chips || '<span class="muted">vocabulaire en cours…</span>'}</td></tr>`;
+        })
+        .join("");
+    }
     const deck = WMC_ANALYSIS.bestDeck(cards, "tank");
     const attackers = WMC_ANALYSIS.attackRanking(cards, 5);
     const matches = WMC_ANALYSIS.wishlistMatches(guild);
@@ -241,6 +286,10 @@
       </table>`
           : ""
       }
+
+      <h3>Tes thèmes</h3>
+      <table>${themeSection || `<tr><td class="muted" colspan="2">Aucune étiquette (ou session absente).</td></tr>`}</table>
+      <p class="muted">Comptes = cartes possédées qui matchent. Clique un mot pour le retirer du vocabulaire.</p>
 
       <h3>Âmes à corrompre (wishlist)</h3>
       <table>${matchRows}</table>
