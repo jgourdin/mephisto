@@ -35,29 +35,29 @@ const WMC_LEXICON = (() => {
   async function buildVocab(tag, cfg) {
     const name = tag && tag.name;
     if (!name) return [];
+    const nameSet = new Set(WMC_INTEREST.nameWords(name));
     const ttl = (cfg && cfg.vocabTtlDays ? cfg.vocabTtlDays : 90) * 24 * 3600 * 1000;
     const cached = typeof WMC_DB !== "undefined" ? await WMC_DB.getVocab(name).catch(() => null) : null;
     if (cached && Date.now() - (cached.fetchedAt || 0) < ttl) {
-      return applyFilter(cached.words, cached.removed);
+      return applyFilter(cached.words, cached.removed, nameSet);
     }
-    const nameWords = WMC_INTEREST.nameWords(name);
-    const raw = new Set(nameWords);
-    for (const seed of nameWords) {
+    const raw = new Set(nameSet);
+    for (const seed of nameSet) {
       const rimes = await fetchRimes(seed);
       for (const w of rimes) raw.add(WMC_INTEREST.normalize(w));
     }
     const removed = (cached && cached.removed) || [];
     const words = [...raw];
     if (typeof WMC_DB !== "undefined") await WMC_DB.putVocab({ name, words, removed, fetchedAt: Date.now() });
-    return applyFilter(words, removed);
+    return applyFilter(words, removed, nameSet);
   }
 
-  // Filtre Prudent : ≥4 lettres (les mots du nom passent déjà à ≥3 via nameWords,
-  // conservés ici via une seconde chance), pas stopword, pas retiré.
-  function applyFilter(words, removed) {
+  // Filtre Prudent : mots du nom (nameSet) autorisés à ≥3 lettres ; les autres
+  // (issus de rimessolides) exigent ≥4. Exclut stopwords (via matchable) et removed.
+  function applyFilter(words, removed, nameSet) {
     const rm = new Set((removed || []).map(WMC_INTEREST.normalize));
     return [...new Set((words || []).map(WMC_INTEREST.normalize))]
-      .filter((w) => w && !rm.has(w) && (WMC_INTEREST.matchable(w) || WMC_INTEREST.matchable(w, 3)));
+      .filter((w) => w && !rm.has(w) && ((nameSet && nameSet.has(w)) ? WMC_INTEREST.matchable(w, 3) : WMC_INTEREST.matchable(w)));
   }
 
   async function removeWord(name, word) {
