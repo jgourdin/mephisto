@@ -14,7 +14,6 @@ const WMC_INTEREST = (() => {
     "titre", "titres", "page", "pages", "oeuvre", "oeuvres", "style", "annee",
     "annees", "siecle", "edition", "editions", "liste", "type", "types", "partie",
     "nom", "noms", "mot", "mots", "forme", "auteur", "auteurs", "autrice",
-    "val", "hip", "hop",
   ]);
 
   const matchable = (word, minLen = 4) =>
@@ -31,7 +30,7 @@ const WMC_INTEREST = (() => {
       .filter(Boolean);
     for (const p of parts) {
       if (matchable(p, 3)) out.add(p);
-      for (const tok of p.split(/[^a-z0-9]+/)) if (matchable(tok, 3)) out.add(tok);
+      for (const tok of p.split(/[^a-z0-9]+/)) if (matchable(tok, 4)) out.add(tok);
     }
     return [...out];
   }
