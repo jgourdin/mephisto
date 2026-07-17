@@ -1,6 +1,6 @@
 // Service worker: fait tourner le moteur toutes les minutes, même onglet fermé.
 if (typeof WMC_DEFAULTS === "undefined" && typeof importScripts === "function") {
-  importScripts("config.js", "api.js", "engine.js");
+  importScripts("config.js", "api.js", "value.js", "engine.js");
 }
 const WMC_ALARM = "mephisto-tick";
 function ensureAlarm() {

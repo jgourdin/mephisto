@@ -130,6 +130,15 @@ const WMC_ENGINE = (() => {
     return guildCache.set;
   }
 
+  // Most we'll pay for a card: estimated value × ratio, capped by the hard ceiling
+  // (maxBidWb). Falls back to the hard ceiling if the value model isn't loaded.
+  const willingToPay = (card, cfg) => {
+    const hard = cfg.maxBidWb ?? 30;
+    if (typeof WMC_VALUE === "undefined") return hard;
+    const v = WMC_VALUE.estimate(card);
+    return v == null ? hard : Math.min(hard, Math.round(v * (cfg.buyValueRatio ?? 0.6)));
+  };
+
   // ---------- endgame sniper ----------
   // With anti-snipe, a bid under ~11 s left bumps the timer by ~1 min, so an
   // auction is only ever decided in its final seconds. Bidding the instant you're
@@ -160,7 +169,7 @@ const WMC_ENGINE = (() => {
         a.current_bidder?.username !== me && // not already leading
         !mates.has(a.seller?.username) && // never bid on a guildmate's listing
         !mates.has(a.current_bidder?.username) && // never outbid a guildmate
-        nextBidOf(a) <= cfg.maxBidWb &&
+        nextBidOf(a) <= willingToPay(a.card, cfg) && // value-based: worth it vs estimated value
         secondsLeft(a) >= SNIPE_MIN &&
         secondsLeft(a) <= SNIPE_MAX
     );
@@ -177,7 +186,7 @@ const WMC_ENGINE = (() => {
     const sl = secondsLeft(a);
     if (sl < SNIPE_MIN || sl > SNIPE_MAX) return; // timing moved — catch it next tick
     const amount = nextBidOf(a);
-    if (amount > cfg.maxBidWb) return; // rival jumped past our max — let it go
+    if (amount > willingToPay(pick.card, cfg)) return; // past what it's worth to us — let it go (pick.card = full attrs)
     if ((await committedTodayWb()) + amount > cfg.dailySpendCapWb) return;
 
     const res = await WMC_API.bid(pick.id, amount);
@@ -200,6 +209,7 @@ const WMC_ENGINE = (() => {
 
     const mine = await WMC_API.myMarket().catch(() => null);
     if (!mine) return;
+    if (typeof WMC_DB !== "undefined") await WMC_DB.reconcileSellAB(mine.history || []); // settle A/B outcomes
     if ((mine.selling || []).length >= (cfg.sellSlotMax ?? 5)) return; // no free slot
 
     const listed = new Set((mine.selling || []).map((a) => a.card?.id ?? a.card_id));
@@ -213,6 +223,8 @@ const WMC_ENGINE = (() => {
       if (id && p != null) paidFor[id] = Math.min(paidFor[id] ?? Infinity, p);
     }
     const { cards } = await WMC_API.ownedCards().catch(() => ({ cards: [] }));
+    const rank = { UR: 0, SR: 1 };
+    const stat = (c) => (c.atk || 0) + (c.def || 0);
     const candidates = cards.filter(
       (c) =>
         cfg.sellRarities.includes(c.rarity) && // UR/SR only — never Legendaries
@@ -220,10 +232,22 @@ const WMC_ENGINE = (() => {
         !listed.has(c.id)
     );
     if (!candidates.length) return;
-    // Random pick among all UR/SR candidates (no rarity priority).
-    const card = pickOne(candidates);
+
+    // Strategy — "B" = new (highest value first: UR then top battle stats, UR listed
+    // longer so whales bid it up). "A" = old (random pick, short duration). When the
+    // A/B test is on, flip a coin per listing and record the outcome to compare.
+    const strat = cfg.sellAbTest && chance(0.5) ? "A" : "B";
+    let card, duration;
+    if (strat === "A") {
+      card = pickOne(candidates);
+      duration = cfg.sellDurationMin ?? 10;
+    } else {
+      const ranked = candidates.slice().sort((a, b) => (rank[a.rarity] ?? 9) - (rank[b.rarity] ?? 9) || stat(b) - stat(a));
+      card = pickOne(ranked.slice(0, 5));
+      duration = card.rarity === "UR" ? (cfg.sellDurationUrMin ?? 360) : (cfg.sellDurationMin ?? 10);
+    }
     // A bit above what we paid when we know it (≈ +15%, min +1) so we never list
-    // below cost; otherwise a low default base, slightly varied.
+    // below cost; otherwise a low default base. A low base draws bidders who war it up.
     const paid = paidFor[card.id];
     const price =
       paid != null
@@ -231,15 +255,24 @@ const WMC_ENGINE = (() => {
         : Math.max(1, Math.round(cfg.sellStartWb * rnd(0.85, 1.2)));
 
     if (isDry(cfg)) {
-      wmcNotify("😈 Illusion (dry-run)", `Aurait mis en vente ${card.wikipedia_title} (${card.rarity}) à ${price} WB.`);
+      wmcNotify("😈 Illusion (dry-run)", `[${strat}] Aurait mis en vente ${card.wikipedia_title} (${card.rarity}) à ${price} WB (${duration} min).`);
       await store.set({ wmcLastSellAt: Date.now() });
       return;
     }
     await jitter(cfg);
-    const res = await WMC_API.listCard(card.id, price, cfg.sellDurationMin);
+    const res = await WMC_API.listCard(card.id, price, duration);
     await store.set({ wmcLastSellAt: Date.now() });
     if (res.status === 429) return backoff(180_000);
-    if (res.ok) wmcNotify("😈 Carte en vente", `${card.wikipedia_title} (${card.rarity}) listée à ${price} WB.`);
+    if (res.ok) {
+      wmcNotify("😈 Carte en vente", `[${strat}] ${card.wikipedia_title} (${card.rarity}) listée à ${price} WB.`);
+      // Tag the fresh listing with its strategy so we can score A vs B later.
+      if (cfg.sellAbTest && typeof WMC_DB !== "undefined") {
+        const m2 = await WMC_API.myMarket().catch(() => null);
+        const listing = (m2?.selling || []).find((a) => (a.card?.id ?? a.card_id) === card.id);
+        if (listing)
+          await WMC_DB.recordSellAB({ auctionId: listing.id, strategy: strat, cardId: card.id, title: card.wikipedia_title, rarity: card.rarity, stat: stat(card), base: price, durationMin: duration, listedAt: Date.now() });
+      }
+    }
   }
 
   // ---------- target watch ----------
@@ -249,17 +282,17 @@ const WMC_ENGINE = (() => {
   // a few single-auction reads per pass, spaced out.
   async function watchTarget(cfg) {
     if (typeof WMC_DB === "undefined") return; // no DB in this context (e.g. service worker)
-    const target = (cfg.targetPlayer || "").trim();
-    if (!target) return;
+    // Comma-separated list of usernames to watch (comma only — usernames can contain spaces).
+    const targets = new Set((cfg.targetPlayer || "").split(",").map((t) => t.trim()).filter(Boolean));
+    if (!targets.size) return;
     const involved = (await getAuctions()).filter(
-      (a) => a.seller?.username === target || a.current_bidder?.username === target
+      (a) => targets.has(a.seller?.username) || targets.has(a.current_bidder?.username)
     );
     if (!involved.length) return;
     const rows = [];
     const now = Date.now();
     for (const a of involved.slice(0, 6)) {
       const base = {
-        user: target,
         auctionId: a.id,
         cardId: a.card?.id ?? a.card_id,
         title: a.card?.wikipedia_title,
@@ -268,13 +301,27 @@ const WMC_ENGINE = (() => {
         def: a.snapshot_def,
         endAt: a.end_at,
       };
-      if (a.seller?.username === target) {
-        rows.push({ ...base, key: `l:${a.id}`, type: "listing", baseAmount: a.base_amount, currentBid: a.current_bid, at: now });
+      if (targets.has(a.seller?.username)) {
+        rows.push({ ...base, user: a.seller.username, key: `l:${a.id}`, type: "listing", baseAmount: a.base_amount, currentBid: a.current_bid, at: now });
       }
       const one = await WMC_API.auctionOne(a.id).catch(() => null);
       for (const b of one?.bids || []) {
-        if (b.bidder?.username !== target) continue;
-        rows.push({ ...base, key: `b:${b.id}`, type: "bid", amount: b.amount, placedAt: b.placed_at, at: new Date(b.placed_at).getTime() || now });
+        if (!targets.has(b.bidder?.username)) continue;
+        rows.push({ ...base, user: b.bidder.username, key: `b:${b.id}`, type: "bid", amount: b.amount, placedAt: b.placed_at, at: new Date(b.placed_at).getTime() || now });
+      }
+      // Trade edge (WB flows buyer -> seller). One row per auction, updated as it
+      // progresses/settles; lets us reconstruct the net-flow graph → the hub account.
+      const fresh = one?.auction || a;
+      const buyer = fresh.winner?.username || fresh.current_bidder?.username;
+      const price = fresh.final_price ?? fresh.current_bid;
+      if (buyer && price != null) {
+        rows.push({
+          ...base,
+          user: targets.has(fresh.seller?.username) ? fresh.seller.username : buyer,
+          key: `t:${a.id}`, type: "trade",
+          seller: fresh.seller?.username, buyer, price, settled: fresh.status,
+          at: now,
+        });
       }
       await sleep(rnd(300, 800)); // space out the single-auction reads
     }

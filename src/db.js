@@ -7,7 +7,7 @@
 
 const WMC_DB = (() => {
   const NAME = "wmc";
-  const VERSION = 2;
+  const VERSION = 3;
   let dbp = null;
 
   function open() {
@@ -41,6 +41,12 @@ const WMC_DB = (() => {
         if (!db.objectStoreNames.contains("target_obs")) {
           const s = db.createObjectStore("target_obs", { keyPath: "key" });
           s.createIndex("user", "user");
+        }
+        // Sell A/B test: one row per listing we create, tagged with the strategy
+        // used, and its settled outcome (sold + final price) reconciled later.
+        if (!db.objectStoreNames.contains("sell_ab")) {
+          const s = db.createObjectStore("sell_ab", { keyPath: "auctionId" });
+          s.createIndex("strategy", "strategy");
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -132,6 +138,55 @@ const WMC_DB = (() => {
     },
     async targetCount(user) {
       return (await this.exportTarget(user)).length;
+    },
+
+    // Sell A/B test: tag a new listing with its strategy; reconcile outcomes from
+    // our settled listings (mine.history); summarise which strategy performs best.
+    async recordSellAB(row) {
+      if (!row?.auctionId) return;
+      await tx("sell_ab", "readwrite", (s) => s.put({ sold: null, finalPrice: null, ...row }));
+    },
+    async reconcileSellAB(history) {
+      if (!history?.length) return;
+      const byId = new Map(history.map((a) => [a.id, a]));
+      await tx("sell_ab", "readwrite", (s) => {
+        const req = s.getAll();
+        req.onsuccess = () => {
+          for (const row of req.result) {
+            if (row.sold != null) continue; // already settled
+            const h = byId.get(row.auctionId);
+            if (!h) continue;
+            const sold = !!(h.winner_id && h.winner_id !== h.seller_id && h.final_price != null);
+            s.put({ ...row, sold, finalPrice: sold ? h.final_price : 0, settledAt: Date.now() });
+          }
+        };
+      });
+    },
+    async sellAbStats() {
+      const rows = await getAll("sell_ab").catch(() => []);
+      const g = {};
+      for (const r of rows) {
+        const s = (g[r.strategy] = g[r.strategy] || { listed: 0, settled: 0, sold: 0, wb: 0 });
+        s.listed++;
+        if (r.sold != null) {
+          s.settled++;
+          if (r.sold) {
+            s.sold++;
+            s.wb += r.finalPrice || 0;
+          }
+        }
+      }
+      const out = {};
+      for (const [k, v] of Object.entries(g))
+        out[k] = {
+          listed: v.listed,
+          settled: v.settled,
+          sold: v.sold,
+          sellThroughPct: v.settled ? Math.round((100 * v.sold) / v.settled) : null,
+          wbPerListing: v.settled ? Math.round(v.wb / v.settled) : null,
+          avgSalePrice: v.sold ? Math.round(v.wb / v.sold) : null,
+        };
+      return out;
     },
 
     // Median observed bid for a rarity (proxy for "fair price").

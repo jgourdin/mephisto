@@ -1,25 +1,27 @@
-# 😈 Méphisto v0.6.0
+# 😈 Méphisto v0.7.0
 
-Deux nouveautés : on épargne la guilde, et on espionne la concurrence.
+Méphisto sait maintenant **ce que vaut une carte** — et achète/vend en conséquence.
 
 ## Nouveautés
 
-- 🛡️ **On épargne la guilde** — Méphisto ne mise plus jamais sur une enchère **vendue par un membre de ta guilde**, et ne **surenchérit jamais contre un co-membre** déjà en tête. Récupéré automatiquement depuis ta guilde, activé par défaut (réglable).
-- 🎯 **Cible surveillée** — renseigne un pseudo dans le panneau 😈 et Méphisto logge discrètement toutes les actions de ce joueur sur le marché : ses **mises et ses ventes**, avec montants, timing et stats des cartes. Bouton **Exporter JSON** pour tout télécharger et étudier sa stratégie hors-ligne. Tourne en observation pure (dry-run) sans rien miser.
+- 🧠 **Estimation de valeur + achat malin** — Méphisto estime la valeur de chaque carte à partir de ses attributs (rareté + **popularité Wikipédia** + qualité + stats de combat + collectibilité par thème), et **mise en conséquence** : il rafle les cartes **sous-cotées** (une UR qui vaut 167 achetée à 14 !) et **refuse de surpayer** les communes. Réglages : plafond de mise/carte + ratio achat÷valeur.
+- 💰 **Vente intelligente** — liste d'abord tes cartes de **plus grande valeur** (UR avant SR, meilleures stats), en démarrant juste au-dessus de ton prix d'achat (jamais à perte).
+- 🎯 **Surveillance multi-cibles** — surveille plusieurs joueurs à la fois (pseudos séparés par virgule), capture les échanges (vendeur→acheteur→prix). Export JSON.
+- 🧪 **Test A/B vente** (option, off par défaut) — compare deux stratégies de vente et voit laquelle rapporte le plus.
 
-Inclut tout le reste : sniper de fin de partie, prix de vente juste au-dessus du coût, plafond de dépense par solde, achats **SR et +**, ventes **UR/SR** (jamais les Légendaires ni les favoris ★), Firefox + Android.
+Sur la base de la v0.6.0 : épargne de la guilde, sniper de fin de partie, plafond de dépense, ventes UR/SR (jamais les Légendaires ni les favoris ★), Firefox + Android.
 
 ## Installer
 
 - **Chrome / Arc / Brave / Edge** : télécharge `mephisto-extension.zip`, décompresse, `chrome://extensions` → Mode développeur → « Charger l'extension non empaquetée ».
-- **Firefox** : `mephisto-firefox.zip` → `about:debugging` → « Charger un module temporaire » (ou signé via AMO pour du permanent).
-- **Android** : `mephisto-v0.6.0.apk` → ouvrir sur le téléphone → autoriser la source.
+- **Firefox** : `mephisto-firefox.zip` → `about:debugging` → « Charger un module temporaire ».
+- **Android** : `mephisto-v0.7.0.apk` → ouvrir sur le téléphone → autoriser la source.
 
 Procédures détaillées dans le [README](https://github.com/jgourdin/mephisto#installation).
 
 ## Pour démarrer
 
-Renseigne **ton pseudo** dans le panneau 😈, laisse **Dry-run** coché pour observer, puis décoche pour passer en réel. Le sniper tourne tant que l'onglet du jeu est ouvert.
+Renseigne **ton pseudo** dans le panneau 😈, laisse **Dry-run** coché pour observer, puis décoche pour passer en réel. Tourne tant que l'onglet du jeu est ouvert.
 
 ## ⚠️ Avertissement
 

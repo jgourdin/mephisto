@@ -19,7 +19,7 @@ const dist = join(repo, "dist-firefox");
 const manifest = JSON.parse(readFileSync(join(repo, "manifest.json"), "utf8"));
 
 // Chrome service worker -> Firefox event-page background (deps first).
-manifest.background = { scripts: ["src/config.js", "src/api.js", "src/engine.js", "src/background.js"] };
+manifest.background = { scripts: ["src/config.js", "src/api.js", "src/value.js", "src/engine.js", "src/background.js"] };
 manifest.browser_specific_settings = {
   gecko: { id: "mephisto@jgourdin", strict_min_version: "128.0" },
 };

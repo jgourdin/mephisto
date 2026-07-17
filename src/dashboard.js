@@ -67,11 +67,13 @@
     { k: "dryRun", label: "Dry-run (simule)", cls: "dry" },
     { k: "autoOpen", label: "Auto-open paquets" },
     { k: "autoBid", label: "Auto-bid (SR+)" },
-    { k: "maxBidWb", label: "Mise max (WB)", num: true },
+    { k: "maxBidWb", label: "Plafond mise/carte (WB)", num: true },
+    { k: "buyValueRatio", label: "Ratio achat ÷ valeur", num: true },
     { k: "dailySpendCapWb", label: "Plafond dépense/jour", num: true },
     { k: "autoSell", label: "Auto-sell (flip)" },
+    { k: "sellAbTest", label: "Test A/B vente" },
     { k: "sellStartWb", label: "Prix de vente (WB)", num: true },
-    { k: "targetPlayer", label: "Cible (surveiller)", text: true },
+    { k: "targetPlayer", label: "Cibles (virgules)", text: true },
   ];
 
   function controlsHtml(cfg) {
@@ -111,17 +113,17 @@
     if (exportBtn)
       exportBtn.addEventListener("click", async () => {
         const target = (p.querySelector('[data-k="targetPlayer"]')?.value || "").trim();
-        if (!target) return wmcToast("Cible", "Renseigne d'abord un pseudo à surveiller.");
-        const data = await WMC_DB.exportTarget(target);
-        if (!data.length) return wmcToast("Cible", `Aucune action loggée pour ${target} (laisse tourner un peu).`);
+        if (!target) return wmcToast("Cible", "Renseigne d'abord au moins un pseudo à surveiller.");
+        const data = await WMC_DB.exportTarget(); // all watched players
+        if (!data.length) return wmcToast("Cible", "Aucune action loggée (laisse tourner un peu).");
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `mephisto-target-${target}.json`;
+        a.download = "mephisto-targets.json";
         a.click();
         URL.revokeObjectURL(url);
-        wmcToast("Export", `${data.length} action(s) exportée(s) pour ${target}.`);
+        wmcToast("Export", `${data.length} action(s) exportée(s).`);
       });
   }
 
@@ -140,7 +142,8 @@
     for (const r of RARITIES) medians[r] = await WMC_DB.medianPriceByRarity(r);
     const pulls = await WMC_DB.pullStats();
     const targetName = (cfg.targetPlayer || "").trim();
-    const targetCount = targetName ? await WMC_DB.targetCount(targetName).catch(() => 0) : 0;
+    const targetCount = targetName ? await WMC_DB.targetCount().catch(() => 0) : 0;
+    const abStats = cfg.sellAbTest ? await WMC_DB.sellAbStats().catch(() => ({})) : null;
     const cards = owned.cards || [];
     const deck = WMC_ANALYSIS.bestDeck(cards, "tank");
     const attackers = WMC_ANALYSIS.attackRanking(cards, 5);
@@ -200,6 +203,25 @@
       <h3>Cible surveillée</h3>
       <p class="muted">${targetName ? `${esc(targetName)} — ${targetCount} action(s) loggée(s)` : "Renseigne un pseudo dans « Cible » ci-dessus."}</p>
       <button id="wmc-export-target">Exporter JSON</button>
+
+      ${
+        abStats
+          ? `<h3>Test A/B vente</h3>
+      <table>
+        <tr><td class="muted">Strat.</td><td class="r muted">vendus/réglés</td><td class="r muted">taux</td><td class="r muted">WB/listing</td></tr>
+        ${
+          Object.keys(abStats).length
+            ? Object.entries(abStats)
+                .map(
+                  ([s, v]) =>
+                    `<tr><td>${s === "A" ? "Ancienne" : "Nouvelle"} (${s})</td><td class="r">${v.sold}/${v.settled}</td><td class="r">${v.sellThroughPct ?? "—"}%</td><td class="r">${v.wbPerListing ?? "—"}</td></tr>`
+                )
+                .join("")
+            : `<tr><td class="muted" colspan="4">Pas encore de données (les ventes doivent se régler).</td></tr>`
+        }
+      </table>`
+          : ""
+      }
 
       <h3>Âmes à corrompre (wishlist)</h3>
       <table>${matchRows}</table>

@@ -19,7 +19,8 @@ const WMC_DEFAULTS = {
   //                          "cheap"  = old behaviour (one bid on cheapest, no re-bid)
   myUsername: "", // your game pseudo — set it in the popup; never outbid yourself / bid on your own listings
   targetRarities: ["SR", "UR", "L"], // NEVER buy below Super Rare
-  maxBidWb: 30, // never bid above this per auction (proxy-bid ceiling)
+  maxBidWb: 100, // HARD ceiling per auction — never pay above this whatever the value
+  buyValueRatio: 0.6, // value-based bidding: pay at most (estimated value × this). Bid up to min(value×ratio, maxBidWb)
   dailySpendCapWb: 150, // hard cap of WB committed by auto-bid per day (UTC)
   bidCooldownMs: 20_000, // min delay between two automated bids
   dealMedianRatio: 0.7, // advisory "steal" flag when priced under this × rarity median
@@ -29,17 +30,19 @@ const WMC_DEFAULTS = {
   sellRarities: ["SR", "UR"], // flip UR/SR only — Legendaries are keepers, never auto-sold
   sellStartWb: 5, // LOW starting base on purpose: a low base attracts bidders who war the
   //                 price up; a high base sits unsold (market data: bid-getters start ~10, dead ~99)
-  sellDurationMin: 10, // auction duration for listings (minutes)
+  sellDurationMin: 10, // auction duration for SR listings (minutes) — they clear cheap fast
+  sellDurationUrMin: 30, // UR a bit longer than SR to catch buyers, but short enough for fast turnover
   sellSlotMax: 5, // don't exceed the active-sell limit (5 free / 10 PRO)
   sellSkipStarred: true, // never auto-sell favourites — star a card to keep it
+  sellAbTest: false, // split each listing 50/50 old (random, 10-min) vs new (stat-priority, UR longer) + track outcomes
 
   // --- Guild wishlist ---
   guildWatch: false, // notify when you can gift a wishlist card
   autoGift: false, // auto-gift the top match once/day (uses learned endpoint)
   spareGuildmates: true, // never bid on a guildmate's listing, and never outbid a guildmate
 
-  // --- Target watch (log one player's market moves for export/analysis) ---
-  targetPlayer: "", // username to monitor; empty = off
+  // --- Target watch (log players' market moves for export/analysis) ---
+  targetPlayer: "", // username(s) to monitor, comma/space-separated; empty = off
 
   // --- Cadence / politeness ---
   tickMinutes: 1, // service-worker alarm period (min 1 min in MV3)

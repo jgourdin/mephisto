@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Méphisto — pacte pour WikiMasters",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Le démon des enchères de wiki-masters.com : auto-open, auto-bid, auto-sell, dashboard. Usage personnel / apprentissage. « Le diable est dans les enchères. »",
   "permissions": ["storage", "unlimitedStorage", "alarms", "notifications"],
   "host_permissions": ["https://www.wiki-masters.com/*"],
@@ -22,6 +22,7 @@
         "src/db.js",
         "src/api.js",
         "src/analysis.js",
+        "src/value.js",
         "src/engine.js",
         "src/driver.js",
         "src/dashboard.js"
