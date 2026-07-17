@@ -137,14 +137,40 @@ const WMC_ENGINE = (() => {
     return WMC_DB.getCardMeta(card.wikipedia_title).catch(() => null);
   }
 
+  // Vocabulaire compilé (tags de l'utilisateur × rimessolides), rafraîchi ~30 min.
+  let vocabCache = { at: 0, compiled: [], tagIds: {} };
+  async function interestVocab(cfg) {
+    if (typeof WMC_TAGSYNC === "undefined" || typeof WMC_LEXICON === "undefined" || typeof WMC_INTEREST === "undefined") {
+      return { compiled: [], tagIds: {} };
+    }
+    if (Date.now() - vocabCache.at < 1_800_000 && vocabCache.compiled.length) return vocabCache;
+    const tags = await WMC_TAGSYNC.listTags();
+    const tagIds = {};
+    const built = [];
+    for (const t of tags) {
+      tagIds[t.id] = t.name;
+      const words = await WMC_LEXICON.buildVocab(t, cfg); // cache-first, fetch rimessolides si besoin
+      built.push({ tagId: t.id, words });
+    }
+    vocabCache = { at: Date.now(), compiled: WMC_INTEREST.compileVocab(built), tagIds };
+    return vocabCache;
+  }
+  const onThemeTags = (card, meta, vocab) =>
+    typeof WMC_INTEREST === "undefined" ? [] : WMC_INTEREST.classify(card, meta, vocab.compiled);
+
   // Most we'll pay for a card: estimated value × ratio, capped by the hard ceiling
   // (maxBidWb). `meta` = cached desirability signals. Falls back to the hard
-  // ceiling if the value model isn't loaded.
-  const willingToPay = (card, meta, cfg) => {
+  // ceiling if the value model isn't loaded. `onTheme` adds a bonus (still capped)
+  // when interest auto-bid is enabled and the card matches a user tag.
+  const willingToPay = (card, meta, cfg, onTheme) => {
     const hard = cfg.maxBidWb ?? 30;
-    if (typeof WMC_VALUE === "undefined") return hard;
-    const v = WMC_VALUE.estimate(card, meta);
-    return v == null ? hard : Math.min(hard, Math.round(v * (cfg.buyValueRatio ?? 0.6)));
+    let base = hard;
+    if (typeof WMC_VALUE !== "undefined") {
+      const v = WMC_VALUE.estimate(card, meta);
+      base = v == null ? hard : Math.round(v * (cfg.buyValueRatio ?? 0.6));
+    }
+    if (onTheme && cfg.interestAutoBid) base += cfg.interestBidBonus ?? 0;
+    return Math.min(hard, base);
   };
 
   // ---------- endgame sniper ----------
@@ -167,6 +193,7 @@ const WMC_ENGINE = (() => {
     if (isDry(cfg)) return; // no pseudo / dry-run → observe only
     const me = cfg.myUsername;
     const mates = cfg.spareGuildmates ? await guildmates() : new Set();
+    const vocab = cfg.interestAutoBid ? await interestVocab(cfg) : { compiled: [] };
     // Cheap scan off the shared cache — end_at is stable, so seconds-left is
     // accurate even from a slightly old snapshot. Sync filters first (rarity,
     // ownership, guild, timing); the value gate needs an async desirability read.
@@ -187,10 +214,11 @@ const WMC_ENGINE = (() => {
     const inWindow = [];
     for (const a of candidates) {
       const meta = await cardMeta(a.card);
-      if (nextBidOf(a) <= willingToPay(a.card, meta, cfg)) inWindow.push(a);
+      if (nextBidOf(a) <= willingToPay(a.card, meta, cfg, onThemeTags(a.card, meta, vocab).length > 0)) inWindow.push(a);
     }
     if (!inWindow.length) return;
-    inWindow.sort((x, y) => secondsLeft(x) - secondsLeft(y)); // most urgent first
+    const themed = (a) => (cfg.interestAutoBid && onThemeTags(a.card, null, vocab).length ? 0 : 1);
+    inWindow.sort((x, y) => themed(x) - themed(y) || secondsLeft(x) - secondsLeft(y));
     const pick = inWindow[0];
 
     // Confirm on the freshest single-auction read: true price + true timing (the
@@ -203,7 +231,7 @@ const WMC_ENGINE = (() => {
     if (sl < SNIPE_MIN || sl > SNIPE_MAX) return; // timing moved — catch it next tick
     const amount = nextBidOf(a);
     const pickMeta = await cardMeta(pick.card); // pick.card = full attrs (list); a.card may be partial
-    if (amount > willingToPay(pick.card, pickMeta, cfg)) return; // past what it's worth to us — let it go
+    if (amount > willingToPay(pick.card, pickMeta, cfg, onThemeTags(pick.card, pickMeta, vocab).length > 0)) return; // past what it's worth to us — let it go
     if ((await committedTodayWb()) + amount > cfg.dailySpendCapWb) return;
 
     const res = await WMC_API.bid(pick.id, amount);
@@ -258,10 +286,12 @@ const WMC_ENGINE = (() => {
     const { cards } = await WMC_API.ownedCards().catch(() => ({ cards: [] }));
     const rank = { UR: 0, SR: 1 };
     const stat = (c) => (c.atk || 0) + (c.def || 0);
+    const vocab = cfg.interestProtectSell ? await interestVocab(cfg) : { compiled: [] };
     const candidates = cards.filter(
       (c) =>
         cfg.sellRarities.includes(c.rarity) && // UR/SR only — never Legendaries
         !(cfg.sellSkipStarred && c.starred) && // keep favourites
+        !(cfg.interestProtectSell && onThemeTags(c, null, vocab).length) && // protège le on-theme
         !listed.has(c.id)
     );
     if (!candidates.length) return;
@@ -399,6 +429,52 @@ const WMC_ENGINE = (() => {
     if (typeof WMC_ENRICH === "undefined" || typeof WMC_DB === "undefined") return;
     const cards = (await getAuctions().catch(() => [])).map((a) => a.card).filter(Boolean);
     await WMC_ENRICH.enrichSeen(cards, cfg.enrichPerCycle ?? 3);
+    if (cfg.interestAutoTag || cfg.interestProtectSell) {
+      const owned = (await WMC_API.ownedCards().catch(() => ({ cards: [] }))).cards || [];
+      await WMC_ENRICH.enrichSeen(owned, cfg.enrichPerCycle ?? 3, { rarities: ["L", "UR", "SR", "R", "PC", "C"] });
+    }
+  }
+
+  // ---------- interest: auto-tag owned cards ----------
+  async function interestAutoTag(cfg) {
+    if (!cfg.interestAutoTag) return;
+    const vocab = await interestVocab(cfg);
+    if (!vocab.compiled.length) return;
+    const already = await WMC_TAGSYNC.listAssignments();
+    const owned = (await WMC_API.ownedCards().catch(() => ({ cards: [] }))).cards || [];
+    const pairs = [];
+    for (const c of owned) {
+      const ucid = c.userCardId;
+      if (!ucid) continue;
+      const meta = await cardMeta(c);
+      for (const tagId of onThemeTags(c, meta, vocab)) {
+        if (!already.has(`${ucid}|${tagId}`)) pairs.push({ user_card_id: ucid, tag_id: tagId });
+      }
+    }
+    if (!pairs.length) return;
+    const res = await WMC_TAGSYNC.assignTags(pairs, isDry(cfg));
+    wmcNotify(isDry(cfg) ? "😈 Étiquetage (dry-run)" : "😈 Cartes étiquetées",
+      `${res.count} étiquette(s) ${isDry(cfg) ? "seraient posées" : "posées"}.`);
+  }
+
+  // ---------- interest: market scan ----------
+  async function interestMarketScan(cfg) {
+    if (!cfg.interestWatch) return;
+    const vocab = await interestVocab(cfg);
+    if (!vocab.compiled.length) return;
+    const hits = (await getAuctions().catch(() => []))
+      .filter((a) => a.status === "active" && cfg.targetRarities.includes(a.card?.rarity))
+      .filter((a) => onThemeTags(a.card, null, vocab).length);
+    if (!hits.length) return;
+    const { wmcInterestSeen = {} } = await store.get({ wmcInterestSeen: {} });
+    const fresh = hits.filter((a) => !wmcInterestSeen[a.id]);
+    if (!fresh.length) return;
+    const now = Date.now();
+    for (const a of fresh) wmcInterestSeen[a.id] = now;
+    for (const k of Object.keys(wmcInterestSeen)) if (now - wmcInterestSeen[k] > 21_600_000) delete wmcInterestSeen[k];
+    await store.set({ wmcInterestSeen });
+    wmcNotify("😈 Carte à ton goût au marché",
+      `${fresh.length} enchère(s) on-theme, ex. ${fresh[0].card?.wikipedia_title} (${fresh[0].card?.rarity}).`);
   }
 
   // ---------- one full cycle ----------
@@ -410,7 +486,10 @@ const WMC_ENGINE = (() => {
     try {
       // Shuffle the job order and occasionally skip one — humans aren't tidy.
       // Bidding is NOT here — it's the endgame sniper on its own fast timer.
-      const jobs = shuffle([() => openPacks(cfg), () => autoSell(cfg), () => watchTarget(cfg), () => enrichCards(cfg)]);
+      const jobs = shuffle([
+        () => openPacks(cfg), () => autoSell(cfg), () => watchTarget(cfg),
+        () => enrichCards(cfg), () => interestAutoTag(cfg), () => interestMarketScan(cfg),
+      ]);
       for (const job of jobs) {
         if (chance(0.15)) continue;
         await job();

@@ -48,7 +48,7 @@ const WMC_API = {
       out.push(...collection);
       if (collection.length < 50) break;
     }
-    const cards = out.map((e) => ({ ...e.card, count: e.count, starred: e.starred, tags: e.tags }));
+    const cards = out.map((e) => ({ ...e.card, count: e.count, starred: e.starred, tags: e.tags, userCardId: e.id }));
     return { cards };
   },
   auctions: (sort = "ending_soon", page = 1, limit = 50) =>
