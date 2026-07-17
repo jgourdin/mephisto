@@ -7,7 +7,7 @@
 
 const WMC_DB = (() => {
   const NAME = "wmc";
-  const VERSION = 3;
+  const VERSION = 4;
   let dbp = null;
 
   function open() {
@@ -47,6 +47,19 @@ const WMC_DB = (() => {
         if (!db.objectStoreNames.contains("sell_ab")) {
           const s = db.createObjectStore("sell_ab", { keyPath: "auctionId" });
           s.createIndex("strategy", "strategy");
+        }
+        // Cached desirability signals per Wikipedia title (langlinks, backlinks,
+        // pageview-spike ratio, geek category) + derived score. Fetched from the
+        // Wikipedia API, cached here so value.js can read it synchronously.
+        if (!db.objectStoreNames.contains("card_meta")) {
+          db.createObjectStore("card_meta", { keyPath: "title" });
+        }
+        // Real clearing prices of settled auctions (title + rarity + final), so we
+        // can anchor value on what the market actually pays, not on pageviews.
+        if (!db.objectStoreNames.contains("sale_obs")) {
+          const s = db.createObjectStore("sale_obs", { keyPath: "key" });
+          s.createIndex("rarity", "rarity");
+          s.createIndex("title", "title");
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -187,6 +200,37 @@ const WMC_DB = (() => {
           avgSalePrice: v.sold ? Math.round(v.wb / v.sold) : null,
         };
       return out;
+    },
+
+    // Cached desirability signals per Wikipedia title.
+    async getCardMeta(title) {
+      if (!title) return null;
+      const db = await open();
+      return new Promise((resolve) => {
+        const req = db.transaction("card_meta", "readonly").objectStore("card_meta").get(title);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    },
+    async putCardMeta(row) {
+      if (!row?.title) return;
+      await tx("card_meta", "readwrite", (s) => s.put({ ...row, fetchedAt: row.fetchedAt ?? Date.now() }));
+    },
+    async allCardMeta() {
+      return getAll("card_meta").catch(() => []);
+    },
+
+    // Real clearing prices of settled-sold auctions, for market-anchored value.
+    async recordSale(rows) {
+      if (!rows?.length) return;
+      await tx("sale_obs", "readwrite", (s) => rows.forEach((r) => r?.key && s.put(r)));
+    },
+    async medianSaleByRarity(rarity) {
+      const rows = await getAll("sale_obs", "rarity", rarity).catch(() => []);
+      return median(rows.map((r) => r.final).filter((n) => Number.isFinite(n)));
+    },
+    async salesByTitle(title) {
+      return getAll("sale_obs", "title", title).catch(() => []);
     },
 
     // Median observed bid for a rarity (proxy for "fair price").

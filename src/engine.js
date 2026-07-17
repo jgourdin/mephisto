@@ -130,12 +130,20 @@ const WMC_ENGINE = (() => {
     return guildCache.set;
   }
 
+  // Cached desirability signals for a card (or null — un-enriched or no DB, e.g.
+  // service worker). value.js reads this to score UR/L desirability.
+  async function cardMeta(card) {
+    if (typeof WMC_DB === "undefined" || !card?.wikipedia_title) return null;
+    return WMC_DB.getCardMeta(card.wikipedia_title).catch(() => null);
+  }
+
   // Most we'll pay for a card: estimated value × ratio, capped by the hard ceiling
-  // (maxBidWb). Falls back to the hard ceiling if the value model isn't loaded.
-  const willingToPay = (card, cfg) => {
+  // (maxBidWb). `meta` = cached desirability signals. Falls back to the hard
+  // ceiling if the value model isn't loaded.
+  const willingToPay = (card, meta, cfg) => {
     const hard = cfg.maxBidWb ?? 30;
     if (typeof WMC_VALUE === "undefined") return hard;
-    const v = WMC_VALUE.estimate(card);
+    const v = WMC_VALUE.estimate(card, meta);
     return v == null ? hard : Math.min(hard, Math.round(v * (cfg.buyValueRatio ?? 0.6)));
   };
 
@@ -160,8 +168,9 @@ const WMC_ENGINE = (() => {
     const me = cfg.myUsername;
     const mates = cfg.spareGuildmates ? await guildmates() : new Set();
     // Cheap scan off the shared cache — end_at is stable, so seconds-left is
-    // accurate even from a slightly old snapshot.
-    const inWindow = (await getAuctions()).filter(
+    // accurate even from a slightly old snapshot. Sync filters first (rarity,
+    // ownership, guild, timing); the value gate needs an async desirability read.
+    const candidates = (await getAuctions()).filter(
       (a) =>
         a.status === "active" &&
         cfg.targetRarities.includes(a.card?.rarity) &&
@@ -169,11 +178,18 @@ const WMC_ENGINE = (() => {
         a.current_bidder?.username !== me && // not already leading
         !mates.has(a.seller?.username) && // never bid on a guildmate's listing
         !mates.has(a.current_bidder?.username) && // never outbid a guildmate
-        nextBidOf(a) <= willingToPay(a.card, cfg) && // value-based: worth it vs estimated value
         secondsLeft(a) >= SNIPE_MIN &&
         secondsLeft(a) <= SNIPE_MAX
     );
-    if (!inWindow.length) return; // nothing in the endgame yet — wait, don't escalate early
+    if (!candidates.length) return; // nothing in the endgame yet — wait, don't escalate early
+    // Value gate: only keep auctions whose next bid is within what the card is
+    // worth to us (desirability-based). Un-enriched cards score conservatively.
+    const inWindow = [];
+    for (const a of candidates) {
+      const meta = await cardMeta(a.card);
+      if (nextBidOf(a) <= willingToPay(a.card, meta, cfg)) inWindow.push(a);
+    }
+    if (!inWindow.length) return;
     inWindow.sort((x, y) => secondsLeft(x) - secondsLeft(y)); // most urgent first
     const pick = inWindow[0];
 
@@ -186,7 +202,8 @@ const WMC_ENGINE = (() => {
     const sl = secondsLeft(a);
     if (sl < SNIPE_MIN || sl > SNIPE_MAX) return; // timing moved — catch it next tick
     const amount = nextBidOf(a);
-    if (amount > willingToPay(pick.card, cfg)) return; // past what it's worth to us — let it go (pick.card = full attrs)
+    const pickMeta = await cardMeta(pick.card); // pick.card = full attrs (list); a.card may be partial
+    if (amount > willingToPay(pick.card, pickMeta, cfg)) return; // past what it's worth to us — let it go
     if ((await committedTodayWb()) + amount > cfg.dailySpendCapWb) return;
 
     const res = await WMC_API.bid(pick.id, amount);
@@ -209,7 +226,23 @@ const WMC_ENGINE = (() => {
 
     const mine = await WMC_API.myMarket().catch(() => null);
     if (!mine) return;
-    if (typeof WMC_DB !== "undefined") await WMC_DB.reconcileSellAB(mine.history || []); // settle A/B outcomes
+    if (typeof WMC_DB !== "undefined") {
+      await WMC_DB.reconcileSellAB(mine.history || []); // settle A/B outcomes
+      // Record real clearing prices of our settled-sold auctions, so value can be
+      // anchored on what the market actually pays (accumulates over time).
+      const sold = (mine.history || []).filter((h) => h.status === "settled_sold");
+      await WMC_DB.recordSale(
+        sold
+          .map((h) => {
+            const c = h.card || h;
+            const final = h.final_price ?? h.current_bid;
+            return final != null && c.wikipedia_title
+              ? { key: h.id, title: c.wikipedia_title, rarity: c.rarity, final, soldAt: Date.now() }
+              : null;
+          })
+          .filter(Boolean)
+      );
+    }
     if ((mine.selling || []).length >= (cfg.sellSlotMax ?? 5)) return; // no free slot
 
     const listed = new Set((mine.selling || []).map((a) => a.card?.id ?? a.card_id));
@@ -249,10 +282,41 @@ const WMC_ENGINE = (() => {
     // A bit above what we paid when we know it (≈ +15%, min +1) so we never list
     // below cost; otherwise a low default base. A low base draws bidders who war it up.
     const paid = paidFor[card.id];
-    const price =
+    let price =
       paid != null
         ? Math.max(paid + 1, Math.round(paid * 1.15))
         : Math.max(1, Math.round(cfg.sellStartWb * rnd(0.85, 1.2)));
+    // Floor for UR/L so we never give a high-rarity card away at ~10 WB (observed:
+    // URs cleared at 10-16 regardless of base — no bidding war forms). The floor
+    // scales with DESIRABILITY (langs/backlinks/steadiness), not pageviews — an
+    // obscure 26k-view UR cleared at 10 while a French icon reached ~600. Desirable
+    // cards start higher (they'll get bid up anyway); obscure ones stay modest so
+    // they still clear. The auction discovers the premium above the floor.
+    // SR/commons keep the low base (~13 WB commodities).
+    if (card.rarity === "UR" || card.rarity === "L") {
+      // Enrich the card now if we've never seen it — auto-sell lists our OWN
+      // cards, which the market-facing enrichment pass may never have valued, so
+      // desirable ones would otherwise fall back to the base floor.
+      let sellMeta = await cardMeta(card);
+      if (!sellMeta && typeof WMC_ENRICH !== "undefined" && typeof WMC_DB !== "undefined" && card.wikipedia_title) {
+        const sig = await WMC_ENRICH.fetchSignals(card.wikipedia_title, card.lang).catch(() => null);
+        if (sig) {
+          const sc = typeof WMC_VALUE !== "undefined" ? WMC_VALUE.desirabilityScore(sig) : null;
+          await WMC_DB.putCardMeta({ title: card.wikipedia_title, ...sig, score: sc });
+          sellMeta = { ...sig, score: sc };
+        }
+      }
+      const score = typeof WMC_VALUE !== "undefined" ? WMC_VALUE.desirabilityScore(sellMeta) : null;
+      const floor =
+        score == null
+          ? cfg.sellUrFloorWb ?? 25
+          : score >= 4
+            ? cfg.sellUrFloorHighWb ?? 80
+            : score >= 2
+              ? cfg.sellUrFloorMidWb ?? 40
+              : cfg.sellUrFloorWb ?? 25;
+      price = Math.max(price, floor);
+    }
 
     if (isDry(cfg)) {
       wmcNotify("😈 Illusion (dry-run)", `[${strat}] Aurait mis en vente ${card.wikipedia_title} (${card.rarity}) à ${price} WB (${duration} min).`);
@@ -328,6 +392,15 @@ const WMC_ENGINE = (() => {
     if (rows.length) await WMC_DB.recordTargetObs(rows);
   }
 
+  // ---------- desirability enrichment ----------
+  // Fetch + cache Wikipedia signals for the UR/L cards currently on the market so
+  // the sniper can value them by desirability. Rate-limited inside enrichSeen.
+  async function enrichCards(cfg) {
+    if (typeof WMC_ENRICH === "undefined" || typeof WMC_DB === "undefined") return;
+    const cards = (await getAuctions().catch(() => [])).map((a) => a.card).filter(Boolean);
+    await WMC_ENRICH.enrichSeen(cards, cfg.enrichPerCycle ?? 3);
+  }
+
   // ---------- one full cycle ----------
   async function runCycle() {
     if (running || Date.now() < backoffUntil) return; // no overlap, respect back-off
@@ -337,7 +410,7 @@ const WMC_ENGINE = (() => {
     try {
       // Shuffle the job order and occasionally skip one — humans aren't tidy.
       // Bidding is NOT here — it's the endgame sniper on its own fast timer.
-      const jobs = shuffle([() => openPacks(cfg), () => autoSell(cfg), () => watchTarget(cfg)]);
+      const jobs = shuffle([() => openPacks(cfg), () => autoSell(cfg), () => watchTarget(cfg), () => enrichCards(cfg)]);
       for (const job of jobs) {
         if (chance(0.15)) continue;
         await job();

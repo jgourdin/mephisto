@@ -144,6 +144,10 @@
     const targetName = (cfg.targetPlayer || "").trim();
     const targetCount = targetName ? await WMC_DB.targetCount().catch(() => 0) : 0;
     const abStats = cfg.sellAbTest ? await WMC_DB.sellAbStats().catch(() => ({})) : null;
+    const metaAll = (await WMC_DB.allCardMeta().catch(() => [])).filter((m) => m.score != null);
+    const metaTop = metaAll.slice().sort((a, b) => b.score - a.score).slice(0, 10);
+    const urVal = (score) =>
+      typeof WMC_VALUE !== "undefined" && WMC_VALUE.UR_BY_SCORE ? WMC_VALUE.UR_BY_SCORE[score] ?? "—" : "—";
     const cards = owned.cards || [];
     const deck = WMC_ANALYSIS.bestDeck(cards, "tank");
     const attackers = WMC_ANALYSIS.attackRanking(cards, 5);
@@ -199,6 +203,21 @@
         <tr><td>Âmes collectionnées</td><td class="r">${cards.length}</td></tr>
         <tr><td>Guilde</td><td class="r">${esc(guild?.guild?.name || "—")} · #${guild?.leaderboard?.rank ?? "—"}</td></tr>
       </table>
+
+      <h3>Désirabilité geek/FR — ${metaAll.length} évaluée(s)</h3>
+      <table>${
+        metaTop.length
+          ? metaTop
+              .map(
+                (m) =>
+                  `<tr><td>${esc(m.title)}</td><td class="r"><span class="pill">${m.score}/6</span></td>
+        <td class="r">${urVal(m.score)} WB</td>
+        <td class="r muted">${m.langCount}🌐 ${m.backlinks}🔗${m.spikeRatio != null ? ` ·${m.spikeRatio}×` : ""}</td></tr>`
+              )
+              .join("")
+          : `<tr><td class="muted" colspan="4">Pas encore d'évaluations (laisse tourner quelques cycles).</td></tr>`
+      }</table>
+      <p class="muted">Score = notoriété (langues) + ancrage (liens) + intérêt durable (anti-pic). Pilote achat & prix de vente.</p>
 
       <h3>Cible surveillée</h3>
       <p class="muted">${targetName ? `${esc(targetName)} — ${targetCount} action(s) loggée(s)` : "Renseigne un pseudo dans « Cible » ci-dessus."}</p>

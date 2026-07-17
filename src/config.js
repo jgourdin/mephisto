@@ -28,8 +28,15 @@ const WMC_DEFAULTS = {
   // --- Auto-sell (flip: relist owned cards higher to make WB) ---
   autoSell: false,
   sellRarities: ["SR", "UR"], // flip UR/SR only — Legendaries are keepers, never auto-sold
-  sellStartWb: 5, // LOW starting base on purpose: a low base attracts bidders who war the
-  //                 price up; a high base sits unsold (market data: bid-getters start ~10, dead ~99)
+  sellStartWb: 5, // LOW starting base on purpose (SR/commons): a low base attracts bidders who war
+  //                 the price up; a high base sits unsold (market data: bid-getters start ~10, dead ~99)
+  sellUrFloorWb: 25, // UR/L base floor for OBSCURE/un-enriched cards (desirability score 0-1).
+  sellUrFloorMidWb: 40, // UR/L base floor for mid desirability (score 2-3).
+  sellUrFloorHighWb: 80, // UR/L base floor for high desirability (score 4+) — desirable cards start
+  //                        higher (they get bid up anyway); the auction finds the premium above it.
+  //                        Floor scales with DESIRABILITY (langs/backlinks/steadiness), NOT pageviews:
+  //                        an obscure 26k-view UR cleared at 10 while a French icon reached ~600.
+  enrichPerCycle: 3, // max Wikipedia signal fetches per cycle (gentle on the API; cached ~monthly)
   sellDurationMin: 10, // auction duration for SR listings (minutes) — they clear cheap fast
   sellDurationUrMin: 30, // UR a bit longer than SR to catch buyers, but short enough for fast turnover
   sellSlotMax: 5, // don't exceed the active-sell limit (5 free / 10 PRO)

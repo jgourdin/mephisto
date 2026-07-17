@@ -1,27 +1,37 @@
-# 😈 Méphisto v0.7.0
+# 😈 Méphisto v0.8.0
 
-Méphisto sait maintenant **ce que vaut une carte** — et achète/vend en conséquence.
+Méphisto ne se fie plus aux pages-vues Wikipédia — il estime la **désirabilité réelle** d'une carte pour le public geek/FR de WikiMasters, et achète/vend en conséquence.
+
+## Pourquoi cette version
+
+En v0.7.0, la valeur d'une carte venait surtout de ses **pages-vues Wikipédia** — un mauvais proxy : une UR obscure à 26 000 vues (dopée par l'actu) valait « 557 » pour le modèle… mais se vendait **10 WB** en vrai, pendant qu'une icône française à 9 000 vues atteignait **600**. La v0.8.0 corrige ça à la racine.
 
 ## Nouveautés
 
-- 🧠 **Estimation de valeur + achat malin** — Méphisto estime la valeur de chaque carte à partir de ses attributs (rareté + **popularité Wikipédia** + qualité + stats de combat + collectibilité par thème), et **mise en conséquence** : il rafle les cartes **sous-cotées** (une UR qui vaut 167 achetée à 14 !) et **refuse de surpayer** les communes. Réglages : plafond de mise/carte + ratio achat÷valeur.
-- 💰 **Vente intelligente** — liste d'abord tes cartes de **plus grande valeur** (UR avant SR, meilleures stats), en démarrant juste au-dessus de ton prix d'achat (jamais à perte).
-- 🎯 **Surveillance multi-cibles** — surveille plusieurs joueurs à la fois (pseudos séparés par virgule), capture les échanges (vendeur→acheteur→prix). Export JSON.
-- 🧪 **Test A/B vente** (option, off par défaut) — compare deux stratégies de vente et voit laquelle rapporte le plus.
+- 🧠 **Valeur par désirabilité (sans IA)** — Méphisto note chaque carte (0-6) à partir de signaux **structurels** Wikipédia, tous déterministes :
+  - **notoriété mondiale** (nombre de langues de la page)
+  - **ancrage** (nombre de pages qui pointent vers elle — capte le culte français)
+  - **intérêt durable** (stabilité des vues sur 12 mois — élimine les pics d'actu)
+  - **catégorie geek** (jeu vidéo, manga, SF…) en bonus
+  Résultat validé sur le marché réel : Zelda / Naruto / Lovecraft → **6/6**, un politique obscur → 3, une UR sans notoriété → 0.
+- 🎯 **Achat plus fin** — ne surpaie plus les cartes obscures qui « semblaient » chères, et repère les vraies pépites sous-cotées. Toujours borné par le plafond dur par carte.
+- 💰 **Vente à la valeur** — le prix de départ des UR/L monte avec la désirabilité (obscure → base modeste, désirable → base haute) : fini les UR qui valent des centaines bradées à ~10 WB. L'enchère découvre le premium au-dessus du plancher.
+- 📊 **Panneau « Désirabilité »** — voir les cartes évaluées, leur score et leur valeur estimée directement dans le dashboard 😈.
+- 🧾 **Apprentissage du marché** — Méphisto enregistre les prix de vente réels pour affiner sa valorisation dans le temps.
 
-Sur la base de la v0.6.0 : épargne de la guilde, sniper de fin de partie, plafond de dépense, ventes UR/SR (jamais les Légendaires ni les favoris ★), Firefox + Android.
+Sur la base de la v0.7.0 : épargne de la guilde, sniper de fin de partie, plafond de dépense, surveillance multi-cibles, test A/B vente, Firefox + Android.
 
 ## Installer
 
 - **Chrome / Arc / Brave / Edge** : télécharge `mephisto-extension.zip`, décompresse, `chrome://extensions` → Mode développeur → « Charger l'extension non empaquetée ».
 - **Firefox** : `mephisto-firefox.zip` → `about:debugging` → « Charger un module temporaire ».
-- **Android** : `mephisto-v0.7.0.apk` → ouvrir sur le téléphone → autoriser la source.
+- **Android** : `mephisto-v0.8.0.apk` → ouvrir sur le téléphone → autoriser la source.
 
 Procédures détaillées dans le [README](https://github.com/jgourdin/mephisto#installation).
 
 ## Pour démarrer
 
-Renseigne **ton pseudo** dans le panneau 😈, laisse **Dry-run** coché pour observer, puis décoche pour passer en réel. Tourne tant que l'onglet du jeu est ouvert.
+Renseigne **ton pseudo** dans le panneau 😈, laisse **Dry-run** coché pour observer, puis décoche pour passer en réel. Tourne tant que l'onglet du jeu est ouvert. Le panneau « Désirabilité » se remplit au fil des cycles.
 
 ## ⚠️ Avertissement
 

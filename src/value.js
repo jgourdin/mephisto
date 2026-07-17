@@ -1,24 +1,24 @@
-// Card value estimator — deterministic, derived from the market study
-// (see docs/market-value-analysis.md). No AI: the price drivers are numeric and
-// live on the card object, so a formula beats a guess.
+// Card value estimator — deterministic, no AI.
 //
-//   value ≈ rarityFloor
-//           × popFactor(pageviews)   // #1 continuous driver (corr 0.58)
-//           × qFactor(q_score)       // corr 0.42
-//           × statFactor(atk+def)    // UR/L only — battle utility
-//           × themeMultiplier        // geek/FR collectibility, beyond raw popularity
+// UR/L value is driven by DESIRABILITY to the (geek + French) WikiMasters
+// audience, NOT raw Wikipedia pageviews — pageviews proved a poor proxy: an
+// obscure 26k-view UR (a TV doctor, news-driven traffic) cleared at 10 WB while
+// a 9k-view French rap icon reached ~600. We approximate desirability from
+// structural Wikipedia signals cached by enrich.js:
+//   - interwiki breadth (langCount)  → global fame
+//   - backlink count (backlinks)     → French-wiki embeddedness / "linked from
+//                                       famous pages" (catches FR cult status)
+//   - pageview steadiness (spikeRatio, low = good) → durable interest vs a spike
+//   - geek category                  → light bonus
+// SR and below stay flat ~13 WB commodities (stats/pageviews don't move them).
 //
-// Used by the sniper (bid up to value × ratio) and auto-sell (price near value).
+// Used by the sniper (bid up to value × ratio) and auto-sell (floor near value).
 
 const WMC_VALUE = (() => {
-  // Median clearing price per rarity (real market, botnet excluded).
   const RARITY_FLOOR = { L: 1000, UR: 300, SR: 13, R: 13, C: 13, PC: 10 };
   const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
-  // Collectibility of the WikiMasters audience (geek + French): some themes are
-  // over-collected relative to their raw popularity, others under. HYPOTHESIS —
-  // seeded from domain + observed price-per-view (video games ~340 WB/1k views,
-  // sport ~2); tune / auto-calibrate as clearing-price data accumulates.
+  // Theme collectibility — only nudges SR/commons (a manga SR beats a stub SR).
   const THEME_MULT = [
     [/jeu vid[ée]o|jeux vid[ée]o|console|nintendo|playstation|gaming|esport|speedrun/i, 1.5],
     [/manga|anim[ée]|shonen|seinen|otaku|studio ghibli/i, 1.5],
@@ -32,18 +32,45 @@ const WMC_VALUE = (() => {
     return 1;
   };
 
-  // Estimated WB value of a card from its attributes.
-  function estimate(card) {
-    if (!card) return null;
-    const floor = RARITY_FLOOR[card.rarity] ?? 10;
-    // Below UR everything is a ~10-13 commodity — the floor is the whole story
-    // (stats/pageviews don't move the price there), only the theme nudges it.
-    if (card.rarity !== "UR" && card.rarity !== "L") return Math.round(floor * themeMultiplier(card));
-    const pop = clamp((card.pageviews || 0) / 10000, 0.3, 5);
-    const q = clamp((card.q_score || 50) / 60, 0.7, 1.3);
-    const stat = clamp(((card.atk || 0) + (card.def || 0)) / 13000, 0.7, 1.5);
-    return Math.round(floor * pop * q * stat * themeMultiplier(card));
+  // Desirability score 0..6 from cached Wikipedia signals (enrich.js). Tuned on
+  // real clearing prices: Jimmy Mohamed 0→10, Ligue CAF 0→12, Omar Marmoush 3→46,
+  // Kool Shen / The Weeknd 5→450-600. Returns null if the card isn't enriched yet.
+  function desirabilityScore(meta) {
+    if (!meta) return null;
+    let s = 0;
+    const lang = meta.langCount || 0;
+    s += lang >= 41 ? 3 : lang >= 11 ? 2 : lang >= 1 ? 1 : 0;
+    const bl = meta.backlinks || 0;
+    s += bl >= 150 ? 2 : bl >= 30 ? 1 : 0;
+    const spike = meta.spikeRatio;
+    if (spike != null) {
+      if (spike < 1.5) s += 1; // steady interest — durable, cult
+      else if (spike > 3) s -= 1; // news spike — flash traffic, not collector demand
+    }
+    if (meta.geekCat) s += 1;
+    return clamp(s, 0, 6);
   }
 
-  return { estimate, themeMultiplier, RARITY_FLOOR };
+  // WB value per desirability score, for a UR (index 0..6). Anchored on observed
+  // clearing prices; the jump at 4 reflects the bimodal market (obscure ~10-60,
+  // recognizable ~150-600).
+  const UR_BY_SCORE = [12, 20, 35, 60, 150, 350, 600];
+  const UR_CONSERVATIVE = 20; // un-enriched UR: assume low so we never overpay before we know it
+
+  // Estimated WB value. `meta` = cached desirability signals (or null/undefined).
+  function estimate(card, meta) {
+    if (!card) return null;
+    if (card.rarity !== "UR" && card.rarity !== "L") {
+      const floor = RARITY_FLOOR[card.rarity] ?? 10;
+      return Math.round(floor * themeMultiplier(card));
+    }
+    const score = desirabilityScore(meta);
+    const base = score == null ? UR_CONSERVATIVE : UR_BY_SCORE[score];
+    // Legendaries clear far higher, but we never buy them (hard ceiling) nor
+    // auto-sell them — the multiplier is only for completeness.
+    const rarityMult = card.rarity === "L" ? 3 : 1;
+    return Math.round(base * rarityMult);
+  }
+
+  return { estimate, desirabilityScore, themeMultiplier, RARITY_FLOOR, UR_BY_SCORE };
 })();
