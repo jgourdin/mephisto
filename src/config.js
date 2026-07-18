@@ -109,7 +109,7 @@ function wmcToast(title, message) {
   try {
     if (typeof document === "undefined" || !document.body) return;
     const el = document.createElement("div");
-    el.textContent = `😈 ${title} — ${message}`;
+    el.textContent = `${title.startsWith("😈") ? "" : "😈 "}${title} — ${message}`;
     el.style.cssText =
       "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483001;" +
       "max-width:90vw;background:#0b1020;color:#e5e7eb;border:1px solid #4c1d95;border-radius:10px;" +
