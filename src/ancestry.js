@@ -2,6 +2,7 @@
 // Résout les racines de catégorie de chaque étiquette et alimente le cache local
 // des parents de catégories (lots de 50, API MediaWiki avec origin=* : CORS
 // anonyme OK depuis le content-script, comme enrich.js). Aucun service worker.
+// Graphe frwiki uniquement : les cartes non-francophones ne classifient que via le fast-path titre.
 
 const WMC_ANCESTRY = (() => {
   const API = "https://fr.wikipedia.org/w/api.php?action=query&format=json&origin=*&";
@@ -69,12 +70,14 @@ const WMC_ANCESTRY = (() => {
   // Racines effectives d'une étiquette, avec cache DB (TTL rootsTtlDays).
   async function rootsFor(tagName, cfg) {
     if (typeof WMC_DB === "undefined") return [];
-    const ttl = (cfg && cfg.rootsTtlDays ? cfg.rootsTtlDays : 90) * 24 * 3600 * 1000;
     let row = await WMC_DB.getRoots(tagName).catch(() => null);
-    if (!row || Date.now() - (row.fetchedAt || 0) > ttl || !(row.resolved || []).length) {
+    const age = row ? Date.now() - (row.fetchedAt || 0) : Infinity;
+    // Résolution vide persistée aussi (retry quotidien), sinon TTL long.
+    const ttl = ((row && (row.resolved || []).length ? (cfg && cfg.rootsTtlDays) || 90 : 1)) * 24 * 3600 * 1000;
+    if (age > ttl) {
       const resolved = await resolveRoots(tagName);
       row = { name: tagName, resolved, added: (row && row.added) || [], removed: (row && row.removed) || [], fetchedAt: Date.now() };
-      if (resolved.length) await WMC_DB.putRoots(row);
+      await WMC_DB.putRoots(row);
     }
     return effectiveRoots(row);
   }
@@ -114,7 +117,9 @@ const WMC_ANCESTRY = (() => {
         for (const [name, parents] of Object.entries(parsed)) (acc[name] = acc[name] || []).push(...parents);
         cont = j?.continue?.clcontinue ? "&clcontinue=" + encodeURIComponent(j.continue.clcontinue) : "";
       } while (cont && calls < maxCalls);
-      for (const n of chunk) await WMC_DB.putCatParents({ name: n, parents: [...new Set(acc[n] || [])] });
+      // Ne persister que ce que l'API a confirmé (présent dans la réponse) : un lot
+      // échoué reste non caché et sera retenté — jamais de faux "sans parents".
+      for (const n of chunk) if (n in acc) await WMC_DB.putCatParents({ name: n, parents: [...new Set(acc[n])] });
       await sleep(300);
     }
     return calls;

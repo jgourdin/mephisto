@@ -309,10 +309,15 @@ const WMC_ENGINE = (() => {
         !listed.has(c.id)
     );
     if (cfg.interestProtectSell && state.rootsByTag.length) {
+      const depth = cfg.interestDepthMarket ?? 4;
       const kept = [];
       for (const c of candidates) {
         const meta = await cardMeta(c);
-        if (!onThemeTags(c, meta, state, cfg.interestDepthMarket ?? 4).length) kept.push(c); // protège le on-theme
+        const cats = meta && Array.isArray(meta.categories) ? meta.categories : null;
+        if (onThemeTags(c, meta, state, depth).length) continue; // on-theme -> jamais vendue
+        // Graphe incomplet pour cette carte -> impossible d'évaluer -> on ne vend pas (fail-closed).
+        if (cats && cats.length && WMC_INTEREST.missingParents(cats, state.parents, depth).length) continue;
+        kept.push(c);
       }
       candidates = kept;
     }
@@ -557,5 +562,5 @@ const WMC_ENGINE = (() => {
     }
   }
 
-  return { runCycle, openPacks, autoSell, snipeEndgame };
+  return { runCycle, openPacks, autoSell, snipeEndgame, invalidateInterest };
 })();
