@@ -7,7 +7,7 @@
 
 const WMC_DB = (() => {
   const NAME = "wmc";
-  const VERSION = 5;
+  const VERSION = 6;
   let dbp = null;
 
   function open() {
@@ -54,10 +54,15 @@ const WMC_DB = (() => {
         if (!db.objectStoreNames.contains("card_meta")) {
           db.createObjectStore("card_meta", { keyPath: "title" });
         }
-        // Vocabulaire de matching par étiquette (mots rimessolides ∪ nom, filtrés,
-        // moins les mots retirés par l'utilisateur) + horodatage de cache.
-        if (!db.objectStoreNames.contains("interest_vocab")) {
-          db.createObjectStore("interest_vocab", { keyPath: "name" });
+        // v6: l'ascendance de graphe remplace le vocabulaire rimessolides.
+        if (db.objectStoreNames.contains("interest_vocab")) db.deleteObjectStore("interest_vocab");
+        // Parents (topicaux) de chaque catégorie Wikipédia rencontrée — le graphe local.
+        if (!db.objectStoreNames.contains("cat_parents")) {
+          db.createObjectStore("cat_parents", { keyPath: "name" });
+        }
+        // Racines de catégorie par étiquette: résolues + ajouts/retraits de l'utilisateur.
+        if (!db.objectStoreNames.contains("interest_roots")) {
+          db.createObjectStore("interest_roots", { keyPath: "name" });
         }
         // Real clearing prices of settled auctions (title + rarity + final), so we
         // can anchor value on what the market actually pays, not on pageviews.
@@ -225,21 +230,34 @@ const WMC_DB = (() => {
       return getAll("card_meta").catch(() => []);
     },
 
-    async getVocab(name) {
+    async getCatParents(name) {
       if (!name) return null;
       const db = await open();
       return new Promise((resolve) => {
-        const req = db.transaction("interest_vocab", "readonly").objectStore("interest_vocab").get(name);
+        const req = db.transaction("cat_parents", "readonly").objectStore("cat_parents").get(name);
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
     },
-    async putVocab(row) {
+    async putCatParents(row) {
       if (!row || !row.name) return;
-      await tx("interest_vocab", "readwrite", (s) => s.put({ fetchedAt: Date.now(), removed: [], words: [], ...row }));
+      await tx("cat_parents", "readwrite", (s) => s.put({ fetchedAt: Date.now(), parents: [], ...row }));
     },
-    async allVocab() {
-      return getAll("interest_vocab").catch(() => []);
+    async allCatParents() {
+      return getAll("cat_parents").catch(() => []);
+    },
+    async getRoots(name) {
+      if (!name) return null;
+      const db = await open();
+      return new Promise((resolve) => {
+        const req = db.transaction("interest_roots", "readonly").objectStore("interest_roots").get(name);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    },
+    async putRoots(row) {
+      if (!row || !row.name) return;
+      await tx("interest_roots", "readwrite", (s) => s.put({ fetchedAt: Date.now(), resolved: [], added: [], removed: [], ...row }));
     },
 
     // Real clearing prices of settled-sold auctions, for market-anchored value.
