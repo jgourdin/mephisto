@@ -57,7 +57,10 @@ const WMC_DEFAULTS = {
   interestAutoTag: false, // auto-étiquette les cartes possédées (respecte dryRun)
   interestProtectSell: true, // ne jamais auto-vendre/défausser une carte on-theme
   interestBidBonus: 20, // WB ajoutés au plafond d'une carte on-theme, borné par maxBidWb
-  vocabTtlDays: 90, // durée de cache du vocabulaire rimessolides par étiquette
+  interestDepthTag: 3, // profondeur d'ascendance pour l'auto-tag (précision — banc: P86/R72)
+  interestDepthMarket: 4, // profondeur pour repérage/auto-bid/protection (rappel — banc: P77/R80)
+  ancestryFetchPerCycle: 4, // budget d'appels API "parents de catégories" par cycle (lots de 50)
+  rootsTtlDays: 90, // TTL de la résolution des racines de catégorie par étiquette
 
   // --- Cadence / politeness ---
   tickMinutes: 1, // service-worker alarm period (min 1 min in MV3)
