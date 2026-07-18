@@ -19,12 +19,12 @@ const WMC_DEFAULTS = {
   //                          "cheap"  = old behaviour (one bid on cheapest, no re-bid)
   myUsername: "", // your game pseudo — set it in the popup; never outbid yourself / bid on your own listings
   targetRarities: ["SR", "UR", "L"], // NEVER buy below Super Rare
-  maxBidWb: 100, // plafond de mise PAR DÉFAUT — filet de sécurité si une rareté n'a pas le sien
-  maxBidLWb: 80, // plafond de mise par enchère — carte normale L
-  maxBidUrWb: 50, // plafond de mise par enchère — carte normale UR
-  maxBidSrWb: 15, // plafond de mise par enchère — carte normale SR
-  buyValueRatio: 0.6, // value-based bidding: pay at most (estimated value × this). Bid up to min(value×ratio, maxBidWb)
-  dailySpendCapWb: 150, // hard cap of WB committed by auto-bid per day (UTC)
+  maxBidWb: 20, // plafond de mise PAR DÉFAUT — filet pour R/PC/C (marché: quelques WB)
+  maxBidLWb: 500, // plafond L — marché médian ~2000, on ne rafle que les L bradées
+  maxBidUrWb: 150, // plafond UR — attrape les UR pas chères/moyennes (budget 1650)
+  maxBidSrWb: 40, // plafond SR — couvre la masse 10-50 WB
+  buyValueRatio: 0.6, // value-based bidding: pay at most (estimated value × this). Bid up to min(value×ratio, plafond de la carte)
+  dailySpendCapWb: 1500, // plafond de dépense/jour — DOIT être ≥ au plus gros plafond par carte (L=500) ; ~90% du bankroll, laisse la marge pour enchaîner plusieurs bonnes affaires
   bidCooldownMs: 20_000, // min delay between two automated bids
   dealMedianRatio: 0.7, // advisory "steal" flag when priced under this × rarity median
 
@@ -59,8 +59,8 @@ const WMC_DEFAULTS = {
   interestAutoBid: false, // priorité auto-bid on-theme (dans les plafonds)
   interestAutoTag: false, // auto-étiquette les cartes possédées (respecte dryRun)
   interestProtectSell: true, // ne jamais auto-vendre/défausser une carte on-theme
-  interestBidBonus: 20, // WB ajoutés à la valeur estimée d'une carte on-theme (borné par maxBidInterestWb)
-  maxBidInterestWb: 100, // plafond de mise dédié aux cartes de tes centres d'intérêt (toutes raretés)
+  interestBidBonus: 40, // WB ajoutés à la valeur estimée d'une carte on-theme (borné par maxBidInterestWb)
+  maxBidInterestWb: 250, // plafond dédié centres d'intérêt (toutes raretés) — > plafonds normaux, ~15% du bankroll max/carte
   interestDepthTag: 3, // profondeur d'ascendance pour l'auto-tag (précision — banc: P86/R72)
   interestDepthMarket: 4, // profondeur pour repérage/auto-bid/protection (rappel — banc: P77/R80)
   ancestryFetchPerCycle: 4, // budget d'appels API "parents de catégories" par cycle (lots de 50)
