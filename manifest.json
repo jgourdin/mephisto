@@ -25,6 +25,7 @@
         "src/value.js",
         "src/interest.js",
         "src/enrich.js",
+        "src/ancestry.js",
         "src/lexicon.js",
         "src/tagsync.js",
         "src/engine.js",
