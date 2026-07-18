@@ -13,15 +13,3 @@ chrome.alarms.onAlarm.addListener((a) => { if (a.name === WMC_ALARM) WMC_ENGINE.
 chrome.storage.onChanged.addListener((c, area) => {
   if (area === "local" && c.enabled && c.enabled.newValue === true) WMC_ENGINE.runCycle();
 });
-// Fetch rimessolides pour le vocabulaire d'étiquette (CORS bloqué en content-script ;
-// le SW y a droit via host_permissions). Renvoie le HTML brut au content-script.
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg && msg.type === "rimes" && msg.word) {
-    const url = "https://www.rimessolides.com/motscles.aspx?m=" + encodeURIComponent(msg.word);
-    fetch(url)
-      .then((r) => (r.ok ? r.text() : ""))
-      .then((html) => sendResponse({ ok: !!html, html }))
-      .catch(() => sendResponse({ ok: false, html: "" }));
-    return true; // réponse asynchrone
-  }
-});

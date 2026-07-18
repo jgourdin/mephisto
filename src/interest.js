@@ -1,6 +1,6 @@
 // Matching d'intérêts — PUR, sans IA, sans thème en dur. Une carte matche un tag
-// si ses catégories Wikipédia (ou son titre) contiennent un mot du vocabulaire du
-// tag (bord de mot, texte normalisé). Le vocabulaire vient de lexicon.js.
+// si une de ses catégories Wikipédia descend (ascendance de graphe, ancestry.js)
+// d'une racine résolue pour ce tag, ou si son titre contient un mot du nom du tag.
 
 const WMC_INTEREST = (() => {
   const normalize = (s) =>
