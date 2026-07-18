@@ -140,6 +140,7 @@
     p.querySelectorAll(".kw").forEach((chip) =>
       chip.addEventListener("click", async () => {
         await WMC_ANCESTRY.removeRoot(chip.dataset.tag, chip.dataset.r);
+        if (typeof WMC_ENGINE !== "undefined" && WMC_ENGINE.invalidateInterest) WMC_ENGINE.invalidateInterest();
         chip.remove();
         wmcToast("Racines", `« ${chip.dataset.r} » retirée de « ${chip.dataset.tag} ».`);
       })
@@ -148,6 +149,7 @@
       input.addEventListener("keydown", async (ev) => {
         if (ev.key !== "Enter" || !input.value.trim()) return;
         await WMC_ANCESTRY.addRoot(input.dataset.tag, input.value.trim());
+        if (typeof WMC_ENGINE !== "undefined" && WMC_ENGINE.invalidateInterest) WMC_ENGINE.invalidateInterest();
         wmcToast("Racines", `« ${input.value.trim()} » ajoutée à « ${input.dataset.tag} ».`);
         input.value = "";
       })
