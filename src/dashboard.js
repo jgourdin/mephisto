@@ -71,7 +71,11 @@
     { k: "dryRun", label: "Dry-run (simule)", cls: "dry" },
     { k: "autoOpen", label: "Auto-open paquets" },
     { k: "autoBid", label: "Auto-bid (SR+)" },
-    { k: "maxBidWb", label: "Plafond mise/carte (WB)", num: true },
+    { k: "maxBidInterestWb", label: "Mise max centres d'intérêt (WB)", num: true },
+    { k: "maxBidLWb", label: "Mise max L (WB)", num: true },
+    { k: "maxBidUrWb", label: "Mise max UR (WB)", num: true },
+    { k: "maxBidSrWb", label: "Mise max SR (WB)", num: true },
+    { k: "maxBidWb", label: "Mise max par défaut (WB)", num: true },
     { k: "buyValueRatio", label: "Ratio achat ÷ valeur", num: true },
     { k: "dailySpendCapWb", label: "Plafond dépense/jour", num: true },
     { k: "autoSell", label: "Auto-sell (flip)" },
@@ -178,6 +182,17 @@
     const urVal = (score) =>
       typeof WMC_VALUE !== "undefined" && WMC_VALUE.UR_BY_SCORE ? WMC_VALUE.UR_BY_SCORE[score] ?? "—" : "—";
     const cards = owned.cards || [];
+    // Journal des actions de l'IA — l'historique visuel de ce que Méphisto a fait.
+    const ACTION_ICON = { pack: "📦", bid: "🎯", sell: "💰", tag: "🏷️", protect: "🛡️", watch: "👀" };
+    const actionRows = (await WMC_DB.recentActions(25).catch(() => []))
+      .map((a) => {
+        const d = new Date(a.at || 0);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `<tr><td>${ACTION_ICON[a.type] || "•"} ${esc(a.text || a.type)}</td>
+          <td class="r muted">${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}</td></tr>`;
+      })
+      .join("");
+
     let themeSection = "";
     if (typeof WMC_TAGSYNC !== "undefined" && typeof WMC_ANCESTRY !== "undefined" && typeof WMC_INTEREST !== "undefined") {
       const tags = await WMC_TAGSYNC.listTags().catch(() => []);
@@ -303,6 +318,10 @@
       </table>`
           : ""
       }
+
+      <h3>Journal de l'IA</h3>
+      <table>${actionRows || `<tr><td class="muted">Aucune action enregistrée pour l'instant.</td></tr>`}</table>
+      <p class="muted">Les 25 dernières actions de Méphisto : mises 🎯, ventes 💰, paquets 📦, étiquettes 🏷️, protections 🛡️, repérages 👀.</p>
 
       <h3>Tes thèmes</h3>
       <table>${themeSection || `<tr><td class="muted" colspan="2">Aucune étiquette (ou session absente).</td></tr>`}</table>

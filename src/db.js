@@ -7,7 +7,7 @@
 
 const WMC_DB = (() => {
   const NAME = "wmc";
-  const VERSION = 6;
+  const VERSION = 7;
   let dbp = null;
 
   function open() {
@@ -63,6 +63,10 @@ const WMC_DB = (() => {
         // Racines de catégorie par étiquette: résolues + ajouts/retraits de l'utilisateur.
         if (!db.objectStoreNames.contains("interest_roots")) {
           db.createObjectStore("interest_roots", { keyPath: "name" });
+        }
+        // v7: journal des actions de l'automatisation (affiché dans le dashboard).
+        if (!db.objectStoreNames.contains("action_log")) {
+          db.createObjectStore("action_log", { keyPath: "id", autoIncrement: true });
         }
         // Real clearing prices of settled auctions (title + rarity + final), so we
         // can anchor value on what the market actually pays, not on pageviews.
@@ -258,6 +262,32 @@ const WMC_DB = (() => {
     async putRoots(row) {
       if (!row || !row.name) return;
       await tx("interest_roots", "readwrite", (s) => s.put({ fetchedAt: Date.now(), resolved: [], added: [], removed: [], ...row }));
+    },
+
+    // Journal des actions de l'automatisation (auto-open, mises, ventes,
+    // étiquetage, protections…) — la matière de la section « Journal de l'IA ».
+    async recordAction(row) {
+      if (!row || !row.type) return;
+      await tx("action_log", "readwrite", (s) => s.add({ at: Date.now(), ...row }));
+      // Journal borné : au-delà de ~600 lignes, purge les plus anciennes.
+      const db = await open();
+      const count = await new Promise((res) => {
+        const rq = db.transaction("action_log", "readonly").objectStore("action_log").count();
+        rq.onsuccess = () => res(rq.result);
+        rq.onerror = () => res(0);
+      });
+      if (count > 600)
+        await tx("action_log", "readwrite", (s) => {
+          let n = count - 500;
+          s.openCursor().onsuccess = (e) => {
+            const c = e.target.result;
+            if (c && n-- > 0) { c.delete(); c.continue(); }
+          };
+        });
+    },
+    async recentActions(limit = 25) {
+      const rows = await getAll("action_log").catch(() => []);
+      return rows.sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, limit);
     },
 
     // Real clearing prices of settled-sold auctions, for market-anchored value.

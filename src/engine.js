@@ -80,6 +80,13 @@ const WMC_ENGINE = (() => {
     committedCache.at = 0;
   };
 
+  // Trace une action dans le journal du dashboard (best-effort, jamais bloquant).
+  const wmcAction = (type, text, extra) => {
+    try {
+      if (typeof WMC_DB !== "undefined") WMC_DB.recordAction({ type, text, ...extra });
+    } catch (_) { /* pas de DB dans ce contexte (service worker) — le journal est un bonus */ }
+  };
+
   // ---------- open packs ----------
   async function openPacks(cfg) {
     if (!cfg.autoOpen) return;
@@ -106,7 +113,10 @@ const WMC_ENGINE = (() => {
       if (typeof WMC_DB !== "undefined") for (const c of res.data.cards) WMC_DB.recordPull(c, Date.now());
       if (remaining < (cfg.autoOpenMinStock ?? 1)) break;
     }
-    if (opened) wmcNotify("😈 Paquets éventrés", `${opened} paquet(s) ouvert(s), ${remaining} restant(s).`);
+    if (opened) {
+      wmcNotify("😈 Paquets éventrés", `${opened} paquet(s) ouvert(s), ${remaining} restant(s).`);
+      wmcAction("pack", `${opened} paquet(s) ouvert(s), ${remaining} restant(s)`);
+    }
   }
 
   // ---------- market helpers ----------
@@ -169,12 +179,20 @@ const WMC_ENGINE = (() => {
     return WMC_INTEREST.titleTags(card, state.tags);
   };
 
-  // Most we'll pay for a card: estimated value × ratio, capped by the hard ceiling
-  // (maxBidWb). `meta` = cached desirability signals. Falls back to the hard
-  // ceiling if the value model isn't loaded. `onTheme` adds a bonus (still capped)
-  // when interest auto-bid is enabled and the card matches a user tag.
+  // Plafond de mise applicable : dédié aux centres d'intérêt (on-theme, toutes
+  // raretés), sinon par rareté pour les cartes normales, avec maxBidWb en filet
+  // de sécurité. Mettre un plafond à 0 = ne jamais miser sur cette catégorie.
+  const RARITY_BID_KEY = { L: "maxBidLWb", UR: "maxBidUrWb", SR: "maxBidSrWb" };
+  const bidCeiling = (card, cfg, onTheme) => {
+    if (onTheme && cfg.interestAutoBid) return cfg.maxBidInterestWb ?? cfg.maxBidWb ?? 30;
+    const k = RARITY_BID_KEY[card?.rarity];
+    const cap = k ? cfg[k] : undefined;
+    return cap ?? cfg.maxBidWb ?? 30;
+  };
+  // Most we'll pay for a card: estimated value × ratio + bonus on-theme, borné
+  // par le plafond ci-dessus. `meta` = cached desirability signals.
   const willingToPay = (card, meta, cfg, onTheme) => {
-    const hard = cfg.maxBidWb ?? 30;
+    const hard = bidCeiling(card, cfg, onTheme);
     let base = hard;
     if (typeof WMC_VALUE !== "undefined") {
       const v = WMC_VALUE.estimate(card, meta);
@@ -206,12 +224,12 @@ const WMC_ENGINE = (() => {
     const mates = cfg.spareGuildmates ? await guildmates() : new Set();
     const state = cfg.interestAutoBid ? await interestState(cfg) : { tags: [], rootsByTag: [], parents: new Map() };
     // Cheap scan off the shared cache — end_at is stable, so seconds-left is
-    // accurate even from a slightly old snapshot. Sync filters first (rarity,
-    // ownership, guild, timing); the value gate needs an async desirability read.
+    // accurate even from a slightly old snapshot. Sync filters first (ownership,
+    // guild, timing) ; la rareté se décide dans la boucle async — une carte
+    // on-theme est éligible quelle que soit sa rareté.
     const candidates = (await getAuctions()).filter(
       (a) =>
         a.status === "active" &&
-        cfg.targetRarities.includes(a.card?.rarity) &&
         a.seller?.username !== me &&
         a.current_bidder?.username !== me && // not already leading
         !mates.has(a.seller?.username) && // never bid on a guildmate's listing
@@ -226,6 +244,8 @@ const WMC_ENGINE = (() => {
     for (const a of candidates) {
       const meta = await cardMeta(a.card);
       a.__onTheme = onThemeTags(a.card, meta, state, cfg.interestDepthMarket ?? 4).length > 0;
+      // On-theme : toutes les raretés. Normale : raretés cibles uniquement (SR+ par défaut).
+      if (!a.__onTheme && !cfg.targetRarities.includes(a.card?.rarity)) continue;
       if (nextBidOf(a) <= willingToPay(a.card, meta, cfg, a.__onTheme)) inWindow.push(a);
     }
     if (!inWindow.length) return;
@@ -255,6 +275,7 @@ const WMC_ENGINE = (() => {
       const title = a.card?.wikipedia_title ?? pick.card?.wikipedia_title;
       const rarity = a.card?.rarity ?? pick.card?.rarity;
       wmcNotify("😈 Pacte scellé", `${title} (${rarity}) pour ${amount} WB à ${Math.round(sl)}s. Remboursé si surenchéri.`);
+      wmcAction("bid", `${title} (${rarity}) — mise ${amount} WB${pick.__onTheme ? " · centre d'intérêt" : ""}`, { amount, onTheme: !!pick.__onTheme });
     }
   }
 
@@ -319,6 +340,8 @@ const WMC_ENGINE = (() => {
         if (cats && cats.length && WMC_INTEREST.missingParents(cats, state.parents, depth).length) continue;
         kept.push(c);
       }
+      if (kept.length < candidates.length)
+        wmcAction("protect", `${candidates.length - kept.length} carte(s) épargnée(s) de la vente (centres d'intérêt ou graphe incomplet)`);
       candidates = kept;
     }
     if (!candidates.length) return;
@@ -377,6 +400,7 @@ const WMC_ENGINE = (() => {
 
     if (isDry(cfg)) {
       wmcNotify("😈 Illusion (dry-run)", `[${strat}] Aurait mis en vente ${card.wikipedia_title} (${card.rarity}) à ${price} WB (${duration} min).`);
+      wmcAction("sell", `(dry-run) ${card.wikipedia_title} (${card.rarity}) à ${price} WB`, { dryRun: true, price });
       await store.set({ wmcLastSellAt: Date.now() });
       return;
     }
@@ -386,6 +410,7 @@ const WMC_ENGINE = (() => {
     if (res.status === 429) return backoff(180_000);
     if (res.ok) {
       wmcNotify("😈 Carte en vente", `[${strat}] ${card.wikipedia_title} (${card.rarity}) listée à ${price} WB.`);
+      wmcAction("sell", `${card.wikipedia_title} (${card.rarity}) listée à ${price} WB`, { price });
       // Tag the fresh listing with its strategy so we can score A vs B later.
       if (cfg.sellAbTest && typeof WMC_DB !== "undefined") {
         const m2 = await WMC_API.myMarket().catch(() => null);
@@ -455,7 +480,9 @@ const WMC_ENGINE = (() => {
   async function enrichCards(cfg) {
     if (typeof WMC_ENRICH === "undefined" || typeof WMC_DB === "undefined") return;
     const cards = (await getAuctions().catch(() => [])).map((a) => a.card).filter(Boolean);
-    await WMC_ENRICH.enrichSeen(cards, cfg.enrichPerCycle ?? 3);
+    // Repérage/auto-bid on-theme : il faut les catégories de TOUTES les raretés du marché.
+    const marketOpts = cfg.interestWatch || cfg.interestAutoBid ? { rarities: ["L", "UR", "SR", "R", "PC", "C"] } : undefined;
+    await WMC_ENRICH.enrichSeen(cards, cfg.enrichPerCycle ?? 3, marketOpts);
     if (cfg.interestAutoTag || cfg.interestProtectSell) {
       const owned = (await WMC_API.ownedCards().catch(() => ({ cards: [] }))).cards || [];
       await WMC_ENRICH.enrichSeen(owned, cfg.enrichPerCycle ?? 3, { rarities: ["L", "UR", "SR", "R", "PC", "C"] });
@@ -482,6 +509,7 @@ const WMC_ENGINE = (() => {
     const res = await WMC_TAGSYNC.assignTags(pairs, isDry(cfg));
     wmcNotify(isDry(cfg) ? "😈 Étiquetage (dry-run)" : "😈 Cartes étiquetées",
       `${res.count} étiquette(s) ${isDry(cfg) ? "seraient posées" : "posées"}.`);
+    wmcAction("tag", `${res.count} étiquette(s) ${isDry(cfg) ? "seraient posées (dry-run)" : "posées"}`, { dryRun: isDry(cfg), count: res.count });
   }
 
   // ---------- interest: market scan ----------
@@ -490,7 +518,7 @@ const WMC_ENGINE = (() => {
     const state = await interestState(cfg);
     if (!state.rootsByTag.length) return;
     const active = (await getAuctions().catch(() => []))
-      .filter((a) => a.status === "active" && cfg.targetRarities.includes(a.card?.rarity));
+      .filter((a) => a.status === "active"); // toutes raretés — seul l'on-theme est retenu ensuite
     const hits = [];
     for (const a of active) {
       const meta = await cardMeta(a.card);
@@ -506,6 +534,7 @@ const WMC_ENGINE = (() => {
     await store.set({ wmcInterestSeen });
     wmcNotify("😈 Carte à ton goût au marché",
       `${fresh.length} enchère(s) on-theme, ex. ${fresh[0].card?.wikipedia_title} (${fresh[0].card?.rarity}).`);
+    wmcAction("watch", `${fresh.length} enchère(s) on-theme repérée(s), ex. ${fresh[0].card?.wikipedia_title} (${fresh[0].card?.rarity})`);
   }
 
   // ---------- backfill du graphe (interest) ----------
@@ -562,5 +591,5 @@ const WMC_ENGINE = (() => {
     }
   }
 
-  return { runCycle, openPacks, autoSell, snipeEndgame, invalidateInterest };
+  return { runCycle, openPacks, autoSell, snipeEndgame, invalidateInterest, willingToPay };
 })();
