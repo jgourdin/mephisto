@@ -44,7 +44,7 @@ const WMC_ENRICH = (() => {
     let geekCat = false;
     let categories = [];
     try {
-      const api = `${host}/w/api.php?action=query&format=json&origin=*&prop=langlinks%7Clinkshere%7Ccategories&lllimit=500&lhlimit=500&lhnamespace=0&cllimit=500&titles=${enc}`;
+      const api = `${host}/w/api.php?action=query&format=json&origin=*&redirects=1&clshow=!hidden&prop=langlinks%7Clinkshere%7Ccategories&lllimit=500&lhlimit=500&lhnamespace=0&cllimit=500&titles=${enc}`;
       const r = await fetch(api).then((x) => x.json());
       const p = Object.values(r?.query?.pages || {})[0] || {};
       if (p.missing !== undefined) return null; // no such page
