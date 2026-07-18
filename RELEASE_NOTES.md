@@ -1,38 +1,30 @@
-# 😈 Méphisto v0.8.0
+# 😈 Méphisto v0.9.0
 
-Méphisto ne se fie plus aux pages-vues Wikipédia — il estime la **désirabilité réelle** d'une carte pour le public geek/FR de WikiMasters, et achète/vend en conséquence.
+Méphisto connaît maintenant **tes goûts**. Il lit tes étiquettes WikiMasters, comprend ce qu'elles veulent dire grâce au graphe des catégories Wikipédia, et cible les cartes qui te ressemblent — au marché comme dans ta collection.
 
 ## Pourquoi cette version
 
-En v0.7.0, la valeur d'une carte venait surtout de ses **pages-vues Wikipédia** — un mauvais proxy : une UR obscure à 26 000 vues (dopée par l'actu) valait « 557 » pour le modèle… mais se vendait **10 WB** en vrai, pendant qu'une icône française à 9 000 vues atteignait **600**. La v0.8.0 corrige ça à la racine.
+Tu étiquettes tes cartes (« Histoire de France », « Rap & hip-hop », « Val-de-Marne »…) mais rien ne les exploitait, et taguer 1 300 cartes à la main est un enfer. Le premier prototype comparait des mots — précision mesurée : **27%**, inutilisable. La v0.9.0 change de méthode : au lieu de comparer des mots, Méphisto vérifie si une catégorie de la carte **descend** de la catégorie racine de ton étiquette dans le graphe Wikipédia. « Duchesse de Normandie » descend d'« Histoire de France » — aucun mot ne le dit, le graphe le sait. Résultat mesuré sur un banc de 35 cartes réelles : **précision ×3 (86%)**, validé en conditions réelles avant release.
 
 ## Nouveautés
 
-- 🧠 **Valeur par désirabilité (sans IA)** — Méphisto note chaque carte (0-6) à partir de signaux **structurels** Wikipédia, tous déterministes :
-  - **notoriété mondiale** (nombre de langues de la page)
-  - **ancrage** (nombre de pages qui pointent vers elle — capte le culte français)
-  - **intérêt durable** (stabilité des vues sur 12 mois — élimine les pics d'actu)
-  - **catégorie geek** (jeu vidéo, manga, SF…) en bonus
-  Résultat validé sur le marché réel : Zelda / Naruto / Lovecraft → **6/6**, un politique obscur → 3, une UR sans notoriété → 0.
-- 🎯 **Achat plus fin** — ne surpaie plus les cartes obscures qui « semblaient » chères, et repère les vraies pépites sous-cotées. Toujours borné par le plafond dur par carte.
-- 💰 **Vente à la valeur** — le prix de départ des UR/L monte avec la désirabilité (obscure → base modeste, désirable → base haute) : fini les UR qui valent des centaines bradées à ~10 WB. L'enchère découvre le premium au-dessus du plancher.
-- 📊 **Panneau « Désirabilité »** — voir les cartes évaluées, leur score et leur valeur estimée directement dans le dashboard 😈.
-- 🧾 **Apprentissage du marché** — Méphisto enregistre les prix de vente réels pour affiner sa valorisation dans le temps.
+- 🏷️ **Ciblage par étiquettes (100% dynamique)** — Méphisto lit **tes** étiquettes (celles de chaque utilisateur, rien en dur) et résout leur sens via les catégories Wikipédia. Quatre comportements, tous opt-in :
+  - **Repérage marché** : notification quand une enchère porte sur une carte à ton goût.
+  - **Auto-bid prioritaire** : les cartes on-theme passent en tête du sniper (toujours bornées par tes plafonds).
+  - **Auto-étiquetage** : tes cartes reçoivent automatiquement les bonnes étiquettes (dry-run d'abord, réversible).
+  - **Protection anti-vente** : une carte qui te ressemble n'est jamais auto-vendue — et dans le doute (graphe pas encore chargé), Méphisto **ne vend pas**.
+- 🕸️ **Classifieur par ascendance de graphe** — déterministe, sans IA, sans mots-clés codés en dur. Deux profondeurs réglables : précision pour l'étiquetage (d3), rappel pour le marché (d4).
+- 🌱 **Racines éditables** — le dashboard montre comment chaque étiquette a été comprise (ses catégories racines) ; clique pour en retirer, ajoute-en une si Méphisto a mal deviné (ex. ajouter « Musique électronique » à ton étiquette Techno).
+- 🧮 **Respectueux des API** — graphe des parents en cache local (IndexedDB), remplissage budgété par cycle, lots de 50 catégories par appel. La couverture grandit cycle après cycle.
+- 🧪 **Qualité** — 14 tests unitaires, un banc de régression rejouable (`tools/regression-s13.mjs`), CI obligatoire sur les PR, et vérification en conditions réelles (session, migration de base, cycle dry-run) avant cette release.
+- ✨ Peaufinage : fini le double « 😈😈 » dans les notifications in-page.
 
-Sur la base de la v0.7.0 : épargne de la guilde, sniper de fin de partie, plafond de dépense, surveillance multi-cibles, test A/B vente, Firefox + Android.
+Sur la base de la v0.8.0 : valeur par désirabilité, sniper de fin de partie, plafonds de dépense, auto-sell planchers dynamiques, test A/B vente, Firefox + Android.
 
 ## Installer
 
-- **Chrome / Arc / Brave / Edge** : télécharge `mephisto-extension.zip`, décompresse, `chrome://extensions` → Mode développeur → « Charger l'extension non empaquetée ».
+- **Chrome / Arc / Brave / Edge** : télécharge `mephisto-extension.zip`, décompresse, `chrome://extensions` → Mode développeur → « Charger l'extension non empaquetée ». (Mise à jour : recharge simplement l'extension.)
 - **Firefox** : `mephisto-firefox.zip` → `about:debugging` → « Charger un module temporaire ».
-- **Android** : `mephisto-v0.8.0.apk` → ouvrir sur le téléphone → autoriser la source.
+- **Android** : `mephisto-v0.9.0.apk` → ouvrir sur le téléphone → autoriser la source.
 
 Procédures détaillées dans le [README](https://github.com/jgourdin/mephisto#installation).
-
-## Pour démarrer
-
-Renseigne **ton pseudo** dans le panneau 😈, laisse **Dry-run** coché pour observer, puis décoche pour passer en réel. Tourne tant que l'onglet du jeu est ouvert. Le panneau « Désirabilité » se remplit au fil des cycles.
-
-## ⚠️ Avertissement
-
-Projet **personnel, non officiel, à but d'apprentissage**. Non affilié à WikiMasters / WOKcraft. Automatiser son compte peut enfreindre les conditions du jeu (**risque de bannissement**). Utilisation à tes propres risques — voir [LICENSE](https://github.com/jgourdin/mephisto/blob/main/LICENSE).
