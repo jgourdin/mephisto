@@ -43,7 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mephisto-apk
-          path: mephisto-*.apk
+          path: mephisto-${{ github.ref_name }}.apk
 
       - name: Attach to release (tag pushes)
         if: startsWith(github.ref, 'refs/tags/')
@@ -51,6 +51,6 @@ jobs:
         with:
           body_path: RELEASE_NOTES.md
           files: |
-            mephisto-*.apk
+            mephisto-${{ github.ref_name }}.apk
             mephisto-extension.zip
             mephisto-firefox.zip
