@@ -137,26 +137,37 @@ const WMC_ENGINE = (() => {
     return WMC_DB.getCardMeta(card.wikipedia_title).catch(() => null);
   }
 
-  // Vocabulaire compilé (tags de l'utilisateur × rimessolides), rafraîchi ~30 min.
-  let vocabCache = { at: 0, compiled: [], tagIds: {} };
-  async function interestVocab(cfg) {
-    if (typeof WMC_TAGSYNC === "undefined" || typeof WMC_LEXICON === "undefined" || typeof WMC_INTEREST === "undefined") {
-      return { compiled: [], tagIds: {} };
-    }
-    if (Date.now() - vocabCache.at < 1_800_000 && vocabCache.compiled.length) return vocabCache;
+  // État interest: tags de l'utilisateur + racines de catégorie par tag + graphe
+  // local des parents. Cache mémoire 10 min (le backfill l'invalide en écrivant).
+  let interestCache = { at: 0, tags: [], rootsByTag: [], parents: new Map() };
+  const interestReady = () =>
+    typeof WMC_TAGSYNC !== "undefined" && typeof WMC_ANCESTRY !== "undefined" &&
+    typeof WMC_INTEREST !== "undefined" && typeof WMC_DB !== "undefined" && typeof document !== "undefined";
+  async function interestState(cfg) {
+    if (!interestReady()) return { tags: [], rootsByTag: [], parents: new Map() };
+    if (Date.now() - interestCache.at < 600_000 && interestCache.rootsByTag.length) return interestCache;
     const tags = await WMC_TAGSYNC.listTags();
-    const tagIds = {};
-    const built = [];
-    for (const t of tags) {
-      tagIds[t.id] = t.name;
-      const words = await WMC_LEXICON.buildVocab(t, cfg); // cache-first, fetch rimessolides si besoin
-      built.push({ tagId: t.id, words });
-    }
-    vocabCache = { at: Date.now(), compiled: WMC_INTEREST.compileVocab(built), tagIds };
-    return vocabCache;
+    const rootsByTag = [];
+    for (const t of tags) rootsByTag.push({ tagId: t.id, roots: await WMC_ANCESTRY.rootsFor(t.name, cfg) });
+    interestCache = {
+      at: Date.now(),
+      tags: tags.map((t) => ({ tagId: t.id, name: t.name })),
+      rootsByTag,
+      parents: await WMC_ANCESTRY.parentsMap(),
+    };
+    return interestCache;
   }
-  const onThemeTags = (card, meta, vocab) =>
-    typeof WMC_INTEREST === "undefined" ? [] : WMC_INTEREST.classify(card, meta, vocab.compiled);
+  const invalidateInterest = () => { interestCache.at = 0; };
+
+  // Tags d'une carte: ascendance de graphe si on a ses catégories, sinon
+  // fast-path titre (instantané, sans réseau). depth = curseur précision/rappel.
+  const onThemeTags = (card, meta, state, depth) => {
+    if (typeof WMC_INTEREST === "undefined" || !state.rootsByTag.length) return [];
+    const cats = meta && Array.isArray(meta.categories) ? meta.categories : null;
+    if (cats && cats.length)
+      return Object.keys(WMC_INTEREST.walkAncestry(cats, state.rootsByTag, state.parents, depth));
+    return WMC_INTEREST.titleTags(card, state.tags);
+  };
 
   // Most we'll pay for a card: estimated value × ratio, capped by the hard ceiling
   // (maxBidWb). `meta` = cached desirability signals. Falls back to the hard
@@ -193,7 +204,7 @@ const WMC_ENGINE = (() => {
     if (isDry(cfg)) return; // no pseudo / dry-run → observe only
     const me = cfg.myUsername;
     const mates = cfg.spareGuildmates ? await guildmates() : new Set();
-    const vocab = cfg.interestAutoBid ? await interestVocab(cfg) : { compiled: [] };
+    const state = cfg.interestAutoBid ? await interestState(cfg) : { tags: [], rootsByTag: [], parents: new Map() };
     // Cheap scan off the shared cache — end_at is stable, so seconds-left is
     // accurate even from a slightly old snapshot. Sync filters first (rarity,
     // ownership, guild, timing); the value gate needs an async desirability read.
@@ -214,7 +225,7 @@ const WMC_ENGINE = (() => {
     const inWindow = [];
     for (const a of candidates) {
       const meta = await cardMeta(a.card);
-      a.__onTheme = onThemeTags(a.card, meta, vocab).length > 0;
+      a.__onTheme = onThemeTags(a.card, meta, state, cfg.interestDepthMarket ?? 4).length > 0;
       if (nextBidOf(a) <= willingToPay(a.card, meta, cfg, a.__onTheme)) inWindow.push(a);
     }
     if (!inWindow.length) return;
@@ -232,7 +243,7 @@ const WMC_ENGINE = (() => {
     if (sl < SNIPE_MIN || sl > SNIPE_MAX) return; // timing moved — catch it next tick
     const amount = nextBidOf(a);
     const pickMeta = await cardMeta(pick.card); // pick.card = full attrs (list); a.card may be partial
-    if (amount > willingToPay(pick.card, pickMeta, cfg, onThemeTags(pick.card, pickMeta, vocab).length > 0)) return; // past what it's worth to us — let it go
+    if (amount > willingToPay(pick.card, pickMeta, cfg, onThemeTags(pick.card, pickMeta, state, cfg.interestDepthMarket ?? 4).length > 0)) return; // past what it's worth to us — let it go
     if ((await committedTodayWb()) + amount > cfg.dailySpendCapWb) return;
 
     const res = await WMC_API.bid(pick.id, amount);
@@ -254,7 +265,7 @@ const WMC_ENGINE = (() => {
     if (Date.now() - wmcLastSellAt < (cfg.bidCooldownMs ?? 20_000)) return;
     // Protection on-theme impossible à évaluer hors du content-script (ex. service
     // worker : pas de modules interest ni de document/cookies) -> on ne vend pas.
-    if (cfg.interestProtectSell && (typeof WMC_INTEREST === "undefined" || typeof WMC_TAGSYNC === "undefined" || typeof document === "undefined")) return;
+    if (cfg.interestProtectSell && !interestReady()) return;
 
     const mine = await WMC_API.myMarket().catch(() => null);
     if (!mine) return;
@@ -290,18 +301,18 @@ const WMC_ENGINE = (() => {
     const { cards } = await WMC_API.ownedCards().catch(() => ({ cards: [] }));
     const rank = { UR: 0, SR: 1 };
     const stat = (c) => (c.atk || 0) + (c.def || 0);
-    const vocab = cfg.interestProtectSell ? await interestVocab(cfg) : { compiled: [] };
+    const state = cfg.interestProtectSell ? await interestState(cfg) : { tags: [], rootsByTag: [], parents: new Map() };
     let candidates = cards.filter(
       (c) =>
         cfg.sellRarities.includes(c.rarity) && // UR/SR only — never Legendaries
         !(cfg.sellSkipStarred && c.starred) && // keep favourites
         !listed.has(c.id)
     );
-    if (cfg.interestProtectSell && vocab.compiled.length) {
+    if (cfg.interestProtectSell && state.rootsByTag.length) {
       const kept = [];
       for (const c of candidates) {
         const meta = await cardMeta(c);
-        if (!onThemeTags(c, meta, vocab).length) kept.push(c); // protège le on-theme
+        if (!onThemeTags(c, meta, state, cfg.interestDepthMarket ?? 4).length) kept.push(c); // protège le on-theme
       }
       candidates = kept;
     }
@@ -449,8 +460,8 @@ const WMC_ENGINE = (() => {
   // ---------- interest: auto-tag owned cards ----------
   async function interestAutoTag(cfg) {
     if (!cfg.interestAutoTag) return;
-    const vocab = await interestVocab(cfg);
-    if (!vocab.compiled.length) return;
+    const state = await interestState(cfg);
+    if (!state.rootsByTag.length) return;
     const already = await WMC_TAGSYNC.listAssignments();
     const owned = (await WMC_API.ownedCards().catch(() => ({ cards: [] }))).cards || [];
     const pairs = [];
@@ -458,7 +469,7 @@ const WMC_ENGINE = (() => {
       const ucid = c.userCardId;
       if (!ucid) continue;
       const meta = await cardMeta(c);
-      for (const tagId of onThemeTags(c, meta, vocab)) {
+      for (const tagId of onThemeTags(c, meta, state, cfg.interestDepthTag ?? 3)) {
         if (!already.has(`${ucid}|${tagId}`)) pairs.push({ user_card_id: ucid, tag_id: tagId });
       }
     }
@@ -471,14 +482,14 @@ const WMC_ENGINE = (() => {
   // ---------- interest: market scan ----------
   async function interestMarketScan(cfg) {
     if (!cfg.interestWatch) return;
-    const vocab = await interestVocab(cfg);
-    if (!vocab.compiled.length) return;
+    const state = await interestState(cfg);
+    if (!state.rootsByTag.length) return;
     const active = (await getAuctions().catch(() => []))
       .filter((a) => a.status === "active" && cfg.targetRarities.includes(a.card?.rarity));
     const hits = [];
     for (const a of active) {
       const meta = await cardMeta(a.card);
-      if (onThemeTags(a.card, meta, vocab).length) hits.push(a);
+      if (onThemeTags(a.card, meta, state, cfg.interestDepthMarket ?? 4).length) hits.push(a);
     }
     if (!hits.length) return;
     const { wmcInterestSeen = {} } = await store.get({ wmcInterestSeen: {} });
@@ -490,6 +501,34 @@ const WMC_ENGINE = (() => {
     await store.set({ wmcInterestSeen });
     wmcNotify("😈 Carte à ton goût au marché",
       `${fresh.length} enchère(s) on-theme, ex. ${fresh[0].card?.wikipedia_title} (${fresh[0].card?.rarity}).`);
+  }
+
+  // ---------- backfill du graphe (interest) ----------
+  // Complète le cache des parents pour les cartes possédées (et le marché si le
+  // repérage est actif), avec un budget d'appels par cycle. La couverture — donc
+  // le rappel — augmente cycle après cycle ; le fast-path titre couvre l'attente.
+  async function ancestryBackfill(cfg) {
+    if (!(cfg.interestAutoTag || cfg.interestProtectSell || cfg.interestWatch || cfg.interestAutoBid)) return;
+    if (!interestReady()) return;
+    const state = await interestState(cfg);
+    if (!state.rootsByTag.length) return;
+    const depth = Math.max(cfg.interestDepthTag ?? 3, cfg.interestDepthMarket ?? 4);
+    const missing = new Set();
+    const collect = async (cards) => {
+      for (const c of cards) {
+        const meta = await cardMeta(c);
+        const cats = meta && Array.isArray(meta.categories) ? meta.categories : null;
+        if (!cats || !cats.length) continue;
+        for (const m of WMC_INTEREST.missingParents(cats, state.parents, depth)) missing.add(m);
+        if (missing.size > 400) break; // assez de travail pour ce cycle
+      }
+    };
+    await collect(((await WMC_API.ownedCards().catch(() => ({ cards: [] }))).cards) || []);
+    if (cfg.interestWatch || cfg.interestAutoBid)
+      await collect((await getAuctions().catch(() => [])).map((a) => a.card).filter(Boolean));
+    if (!missing.size) return;
+    const calls = await WMC_ANCESTRY.fillParents([...missing], cfg.ancestryFetchPerCycle ?? 4);
+    if (calls) invalidateInterest(); // de nouveaux parents sont en cache
   }
 
   // ---------- one full cycle ----------
@@ -504,6 +543,7 @@ const WMC_ENGINE = (() => {
       const jobs = shuffle([
         () => openPacks(cfg), () => autoSell(cfg), () => watchTarget(cfg),
         () => enrichCards(cfg), () => interestAutoTag(cfg), () => interestMarketScan(cfg),
+        () => ancestryBackfill(cfg),
       ]);
       for (const job of jobs) {
         if (chance(0.15)) continue;
