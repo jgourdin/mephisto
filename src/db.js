@@ -54,7 +54,7 @@ const WMC_DB = (() => {
         if (!db.objectStoreNames.contains("card_meta")) {
           db.createObjectStore("card_meta", { keyPath: "title" });
         }
-        // v6: l'ascendance de graphe remplace le vocabulaire rimessolides.
+        // v6: l'ascendance de graphe remplace l'ancien vocabulaire textuel.
         if (db.objectStoreNames.contains("interest_vocab")) db.deleteObjectStore("interest_vocab");
         // Parents (topicaux) de chaque catégorie Wikipédia rencontrée — le graphe local.
         if (!db.objectStoreNames.contains("cat_parents")) {

@@ -31,6 +31,7 @@
     #wmc-panel .kws{padding:2px 0 8px}
     #wmc-panel .kw{display:inline-block;margin:1px;padding:0 5px;border-radius:6px;background:#1e293b;color:#94a3b8;font-size:11px;cursor:pointer}
     #wmc-panel .kw:hover{background:#7f1d1d;color:#fecaca}
+    #wmc-panel .kw-add{width:100%;margin-top:3px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e5e7eb;font-size:11px;padding:2px 6px}
   `;
 
   const iconUrl = chrome.runtime.getURL("icons/icon128.png");
@@ -82,6 +83,8 @@
     { k: "interestAutoTag", label: "Auto-étiquetage (thèmes)" },
     { k: "interestProtectSell", label: "Protéger le on-theme (vente)" },
     { k: "interestBidBonus", label: "Bonus mise on-theme (WB)", num: true },
+    { k: "interestDepthTag", label: "Profondeur auto-tag (3 = précis)", num: true },
+    { k: "interestDepthMarket", label: "Profondeur marché (4 = rappel)", num: true },
   ];
 
   function controlsHtml(cfg) {
@@ -136,9 +139,17 @@
 
     p.querySelectorAll(".kw").forEach((chip) =>
       chip.addEventListener("click", async () => {
-        await WMC_LEXICON.removeWord(chip.dataset.tag, chip.dataset.w);
+        await WMC_ANCESTRY.removeRoot(chip.dataset.tag, chip.dataset.r);
         chip.remove();
-        wmcToast("Vocabulaire", `« ${chip.dataset.w} » retiré de « ${chip.dataset.tag} ».`);
+        wmcToast("Racines", `« ${chip.dataset.r} » retirée de « ${chip.dataset.tag} ».`);
+      })
+    );
+    p.querySelectorAll(".kw-add").forEach((input) =>
+      input.addEventListener("keydown", async (ev) => {
+        if (ev.key !== "Enter" || !input.value.trim()) return;
+        await WMC_ANCESTRY.addRoot(input.dataset.tag, input.value.trim());
+        wmcToast("Racines", `« ${input.value.trim()} » ajoutée à « ${input.dataset.tag} ».`);
+        input.value = "";
       })
     );
   }
@@ -166,32 +177,35 @@
       typeof WMC_VALUE !== "undefined" && WMC_VALUE.UR_BY_SCORE ? WMC_VALUE.UR_BY_SCORE[score] ?? "—" : "—";
     const cards = owned.cards || [];
     let themeSection = "";
-    if (typeof WMC_TAGSYNC !== "undefined" && typeof WMC_LEXICON !== "undefined" && typeof WMC_INTEREST !== "undefined") {
+    if (typeof WMC_TAGSYNC !== "undefined" && typeof WMC_ANCESTRY !== "undefined" && typeof WMC_INTEREST !== "undefined") {
       const tags = await WMC_TAGSYNC.listTags().catch(() => []);
       const metaByTitle = {};
       for (const m of await WMC_DB.allCardMeta().catch(() => [])) metaByTitle[m.title] = m;
-      const built = [];
-      const vocabByTag = {};
+      const parents = await WMC_ANCESTRY.parentsMap();
+      const rootsByName = {};
+      const rootsByTag = [];
       for (const t of tags) {
-        const words = await WMC_LEXICON.buildVocab(t, cfg).catch(() => []);
-        vocabByTag[t.id] = { name: t.name, color: t.color, words };
-        built.push({ tagId: t.id, words });
+        const roots = await WMC_ANCESTRY.rootsFor(t.name, cfg).catch(() => []);
+        rootsByName[t.id] = { name: t.name, color: t.color, roots };
+        rootsByTag.push({ tagId: t.id, roots });
       }
-      const compiled = WMC_INTEREST.compileVocab(built);
       const counts = {};
       for (const c of cards) {
         const meta = metaByTitle[c.wikipedia_title] || null;
-        for (const id of WMC_INTEREST.classify(c, meta, compiled)) counts[id] = (counts[id] || 0) + 1;
+        const cats = meta && Array.isArray(meta.categories) ? meta.categories : [];
+        for (const id of Object.keys(WMC_INTEREST.walkAncestry(cats, rootsByTag, parents, cfg.interestDepthTag ?? 3)))
+          counts[id] = (counts[id] || 0) + 1;
       }
       themeSection = tags
         .map((t) => {
-          const v = vocabByTag[t.id] || { words: [] };
+          const info = rootsByName[t.id];
           const safeColor = /^#[0-9a-f]{6}$/i.test(t.color || "") ? t.color : "#334155";
-          const chips = v.words.slice(0, 40)
-            .map((w) => `<span class="kw" data-tag="${esc(t.name)}" data-w="${esc(w)}" title="Cliquer pour retirer">${esc(w)}×</span>`)
+          const chips = info.roots
+            .map((r) => `<span class="kw" data-tag="${esc(t.name)}" data-r="${esc(r)}" title="Cliquer pour retirer cette racine">${esc(r)}×</span>`)
             .join(" ");
           return `<tr><td><span class="pill" style="background:${safeColor}22;color:${safeColor}">${esc(t.name)}</span></td><td class="r">${counts[t.id] || 0}</td></tr>
-                  <tr><td colspan="2" class="kws">${chips || '<span class="muted">vocabulaire en cours…</span>'}</td></tr>`;
+                  <tr><td colspan="2" class="kws">${chips || '<span class="muted">racines en cours de résolution…</span>'}
+                    <input type="text" class="kw-add" data-tag="${esc(t.name)}" placeholder="+ racine (nom de catégorie)"></td></tr>`;
         })
         .join("");
     }
@@ -290,7 +304,7 @@
 
       <h3>Tes thèmes</h3>
       <table>${themeSection || `<tr><td class="muted" colspan="2">Aucune étiquette (ou session absente).</td></tr>`}</table>
-      <p class="muted">Comptes = cartes possédées qui matchent. Clique un mot pour le retirer du vocabulaire.</p>
+      <p class="muted">Comptes = cartes dont une catégorie Wikipédia descend d'une racine (profondeur ${cfg.interestDepthTag ?? 3}). Clique une racine pour la retirer, Entrée pour en ajouter.</p>
 
       <h3>Âmes à corrompre (wishlist)</h3>
       <table>${matchRows}</table>
