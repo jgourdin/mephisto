@@ -72,6 +72,54 @@ const WMC_DEFAULTS = {
   actionJitterMs: [1_500, 6_000], // random delay before any automated action
 };
 
+// Aide par champ, affichée au survol (desktop) ou au tap (Android) du badge ⓘ
+// dans le dashboard et le popup. Clé = clé de config, donc une seule source
+// pour les deux surfaces. Rédigé pour l'utilisateur : ce que le réglage fait,
+// et le repère de marché quand il y en a un (cf. docs/market-value-analysis.md).
+const WMC_HELP = {
+  enabled:
+    "Interrupteur général. Décoché, Méphisto observe et conseille mais n'agit jamais. À cocher pour autoriser toute automatisation.",
+  dryRun:
+    "Simule les actions (mise, vente, ouverture) et les journalise sans les exécuter. À garder coché tant que ta config n'est pas validée.",
+
+  autoOpen: "Ouvre tes paquets automatiquement dès qu'il y en a en stock.",
+
+  autoBid:
+    "Place des enchères automatiques sur le marché, dans la limite des plafonds ci-dessous. Ne vise que les SR et au-dessus.",
+  myUsername:
+    "Ton pseudo WikiMasters. Sert à ne jamais enchérir sur tes propres ventes ni te surenchérir toi-même. Obligatoire pour sortir du dry-run.",
+  maxBidInterestWb:
+    "Plafond dédié aux cartes de tes centres d'intérêt, toutes raretés. Plus haut que les plafonds normaux : c'est là que tu acceptes de payer.",
+  maxBidLWb:
+    "Plafond de mise pour une Légendaire. Le marché médian tourne autour de 2000 WB : ce plafond ne rafle que les L bradées.",
+  maxBidUrWb: "Plafond de mise pour une UR. Attrape les UR pas chères à moyennes (marché typique jusqu'à ~1650 WB).",
+  maxBidSrWb: "Plafond de mise pour une SR. Couvre la masse du marché SR, qui se joue entre 10 et 50 WB.",
+  maxBidWb: "Plafond de mise par défaut, filet de sécurité pour les raretés sans plafond dédié (R, PC, C).",
+  buyValueRatio:
+    "Fraction de la valeur estimée que tu acceptes de payer. 0.6 = ne jamais miser plus de 60 % de ce que la carte vaut. La mise retenue est le minimum entre ça et le plafond de la carte.",
+  dailySpendCapWb:
+    "Total maximum dépensé en enchères sur une journée. Doit rester supérieur au plus gros plafond par carte, sinon une seule grosse enchère bloque la journée.",
+
+  autoSell: "Remet en vente automatiquement tes cartes SR/UR (hors favoris ★) pour faire des WB.",
+  sellStartWb:
+    "Prix de départ des mises en vente. Volontairement bas : une base basse attire les enchérisseurs qui font monter le prix, une base haute reste invendue.",
+  sellAbTest: "Répartit tes ventes 50/50 entre l'ancienne et la nouvelle stratégie de prix, et compare les résultats.",
+
+  targetPlayer:
+    "Pseudos de joueurs à surveiller, séparés par des virgules. Leurs mouvements de marché sont journalisés pour analyse. Vide = désactivé.",
+
+  interestWatch: "Surligne et notifie au marché les cartes qui correspondent à tes étiquettes de centres d'intérêt.",
+  interestAutoBid: "Donne la priorité aux cartes on-theme lors des enchères automatiques, dans la limite des plafonds.",
+  interestAutoTag: "Étiquette automatiquement les cartes que tu possèdes selon tes centres d'intérêt. Respecte le dry-run.",
+  interestProtectSell: "Ne jamais mettre en vente ni défausser une carte qui correspond à tes centres d'intérêt.",
+  interestBidBonus:
+    "WB ajoutés à la valeur estimée d'une carte on-theme, pour la remporter plus souvent. Reste borné par le plafond centres d'intérêt.",
+  interestDepthTag:
+    "Jusqu'où remonter le graphe des catégories Wikipédia pour l'auto-étiquetage. Plus bas = plus précis, moins de cartes étiquetées à tort. 3 est le réglage calibré.",
+  interestDepthMarket:
+    "Même profondeur, mais pour le repérage au marché. Plus haut = plus de cartes repérées, au prix de quelques faux positifs. 4 est le réglage calibré.",
+};
+
 // Rarity sort order, highest first (used to prioritize deals).
 const WMC_RARITY_ORDER = ["L", "UR", "SR", "R", "PC", "C"];
 
@@ -124,3 +172,5 @@ function wmcToast(title, message) {
     /* ignore */
   }
 }
+
+if (typeof module !== "undefined") module.exports = { WMC_DEFAULTS, WMC_HELP, WMC_RARITY_ORDER };
