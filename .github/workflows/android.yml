@@ -54,3 +54,4 @@ jobs:
             mephisto-${{ github.ref_name }}.apk
             mephisto-extension.zip
             mephisto-firefox.zip
+            updates.json
