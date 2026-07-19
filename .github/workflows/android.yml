@@ -39,6 +39,42 @@ jobs:
           node tools/build-firefox.mjs
           (cd dist-firefox && zip -r ../mephisto-firefox.zip . -x '*.DS_Store')
 
+      # --self-hosted : on distribue en unlisted, où update_url est autorisé.
+      # Sans ce flag le linter suppose une distribution AMO-hébergée et rejette
+      # update_url (MANIFEST_UPDATE_URL). Bloquant : autant échouer ici que
+      # découvrir le problème après un aller-retour AMO.
+      - name: Lint Firefox extension
+        run: npx --yes web-ext@8 lint --source-dir dist-firefox --self-hosted
+
+      # Signature Mozilla de l'extension Firefox. Sans elle, l'.xpi n'est pas
+      # installable en permanence et la chaîne de mise à jour (update_url ->
+      # updates.json -> mephisto-firefox.xpi) reste cassée.
+      # Canal "unlisted" = auto-distribution : AMO signe sans listing public.
+      # Nécessite les secrets AMO_JWT_ISSUER / AMO_JWT_SECRET (Developer Hub ->
+      # Manage API Keys). Non bloquant : si la signature échoue (clés absentes,
+      # AMO en carafe, version déjà soumise), la release part quand même avec
+      # le zip — l'.xpi pourra être uploadé à la main plus tard.
+      - name: Sign Firefox extension (AMO)
+        if: startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::warning::AMO_JWT_ISSUER/AMO_JWT_SECRET absents — signature ignorée."
+            exit 0
+          fi
+          npx --yes web-ext@8 sign \
+            --source-dir dist-firefox \
+            --artifacts-dir web-ext-artifacts \
+            --channel unlisted \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET"
+          # web-ext nomme l'.xpi d'après le nom + la version de l'add-on ;
+          # updates.json attend exactement mephisto-firefox.xpi.
+          mv web-ext-artifacts/*.xpi mephisto-firefox.xpi
+
       - name: Upload APK artifact (manual runs)
         uses: actions/upload-artifact@v4
         with:
@@ -54,4 +90,5 @@ jobs:
             mephisto-${{ github.ref_name }}.apk
             mephisto-extension.zip
             mephisto-firefox.zip
+            mephisto-firefox.xpi
             updates.json
