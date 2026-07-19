@@ -13,7 +13,7 @@ Extension Chrome (MV3) perso pour [wiki-masters.com](https://www.wiki-masters.co
 - [Avertissement](#avertissement)
 - [Architecture](#architecture)
 - [Features](#features)
-- [Endpoints appris automatiquement](#endpoints-appris-automatiquement)
+- [Endpoints](#endpoints)
 - [Garde-fous](#garde-fous)
 - [Installation (extension, ordinateur)](#installation)
 - [App Android (APK)](#app-android)
@@ -50,9 +50,9 @@ Deux briques :
 
 **Exclu volontairement** : lookup automatique des réponses de quiz en bataille (triche contre de vrais joueurs).
 
-## Endpoints appris automatiquement
+## Endpoints
 
-Les endpoints POST non vérifiés (mise en vente, don guilde, ouverture de paquet) sont **appris par un sniffer réseau** (`src/net-sniffer.js`, monde MAIN) la première fois que tu fais l'action *à la main* : il observe la route + le payload et les stocke. L'automatisation reste inactive tant que l'endpoint n'a pas été vu une fois — jamais de devinette.
+Tous les endpoints utilisés (lecture et action : mise, ouverture de paquet, mise en vente) ont été **vérifiés en live** et sont déclarés explicitement dans `src/api.js` — jamais de devinette. Les appels partent de la page du jeu (ou de la WebView), en same-origin, avec ta session.
 
 ## Garde-fous
 
@@ -114,22 +114,27 @@ _Alternative à l'extension, pour jouer sur Android._ Une app qui charge le jeu 
 ## Structure
 
 ```
-manifest.json         # MV3 ; sniffer en monde MAIN, reste en monde isolé
-src/net-sniffer.js    # (MAIN) apprend les endpoints POST par observation
-src/relay.js          # pont MAIN → isolé, persiste les endpoints appris
+manifest.json         # MV3 ; ordre de chargement des content scripts (source de vérité)
 src/config.js         # défauts + garde-fous
-src/db.js             # IndexedDB : price_obs, pulls, wb_ledger, endpoints
+src/db.js             # IndexedDB : price_obs, pulls, wb_ledger, card_meta, action_log…
 src/api.js            # wrappers API same-origin (contrats vérifiés)
 src/analysis.js       # fonctions pures : deck, attaquants, doublons, wishlist
-src/pulls.js          # /pulls : stock, timer, auto-open, log tirages
-src/marketplace.js    # /marketplace : historique prix, deal scorer, auto-bid
-src/guild.js          # wishlist : notif + auto-don
+src/value.js          # estimation de valeur d'une carte (déterministe, sans IA)
+src/enrich.js         # signaux Wikipédia (interwikis, backlinks, stabilité) → cache card_meta
+src/interest.js       # matching carte ↔ étiquette (pur, testé)
+src/ancestry.js       # ascendance de catégories Wikipédia (I/O + cache cat_parents)
+src/tagsync.js        # étiquettes de l'utilisateur (Supabase, session lue dans le cookie)
+src/engine.js         # moteur : auto-open, auto-sell, sniper d'enchères, scans
+src/driver.js         # boucles de cadence lancées depuis l'onglet du jeu
 src/dashboard.js      # overlay injecté (bouton flottant + panneau)
-src/background.js      # service worker : badge, notifs, alarmes
+src/background.js     # service worker : badge, notifs, alarmes
 src/popup.html|js     # réglages
-docs/recon.md         # reverse-engineering (DOM + API + règles)
+docs/superpowers/     # specs + plans des fonctionnalités récentes
+docs/market-value-analysis.md  # données de marché derrière les plafonds de config.js
+tools/                # build Firefox, régression du classifieur
+android/              # app WebView + build-companion.mjs (bundle régénéré depuis src/)
 ```
 
 ## Notes
 
-Toute la connaissance du jeu (règles, endpoints, structures JSON) est dans `docs/recon.md` et dans la mémoire Claude `reference_wikimasters_game.md`. Endpoints de lecture tous vérifiés en live le 15/07/2026 ; sélecteurs DOM heuristiques (pas d'ids stables) à re-vérifier si l'UI change.
+Toute la connaissance du jeu (règles, endpoints, structures JSON) vit dans les commentaires de `src/api.js` et dans `docs/` (specs/plans des features, analyse du marché). Endpoints vérifiés en live le 15/07/2026 ; sélecteurs DOM heuristiques (pas d'ids stables) à re-vérifier si l'UI change.

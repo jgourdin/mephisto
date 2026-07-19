@@ -16,11 +16,14 @@ const repo = join(here, "..", ".."); // repo root
 const src = join(repo, "src");
 const out = join(repo, "android", "app", "src", "main", "assets", "companion.js");
 
-// Extension modules to reuse, in load order. We skip the extension-only bits:
-// net-sniffer.js / relay.js (MAIN-world endpoint learning — endpoints are
-// known), background.js (service worker — its notifications are handled by the
-// shim below) and popup.* (browser UI).
-const MODULES = ["config.js", "db.js", "api.js", "analysis.js", "value.js", "enrich.js", "engine.js", "driver.js", "dashboard.js"];
+// Extension modules to reuse, in load order — keep in sync with the
+// content_scripts list in manifest.json (engine.js needs all of them). We skip
+// the extension-only bits: background.js (service worker — its notifications
+// are handled by the shim below) and popup.* (browser UI).
+const MODULES = [
+  "config.js", "db.js", "api.js", "analysis.js", "value.js", "interest.js",
+  "enrich.js", "ancestry.js", "tagsync.js", "engine.js", "driver.js", "dashboard.js",
+];
 
 const iconB64 = readFileSync(join(repo, "icons", "icon128.png")).toString("base64");
 const iconDataUri = `data:image/png;base64,${iconB64}`;
