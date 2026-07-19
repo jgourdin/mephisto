@@ -72,7 +72,7 @@ const WMC_DEFAULTS = {
   actionJitterMs: [1_500, 6_000], // random delay before any automated action
 };
 
-// Aide par champ, affichée au survol (desktop) ou au tap (Android) du badge ⓘ
+// Aide par champ, affichée au survol (desktop) ou au tap (Android) du badge « ? »
 // dans le dashboard et le popup. Clé = clé de config, donc une seule source
 // pour les deux surfaces. Rédigé pour l'utilisateur : ce que le réglage fait,
 // et le repère de marché quand il y en a un (cf. docs/market-value-analysis.md).

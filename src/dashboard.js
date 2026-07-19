@@ -23,7 +23,11 @@
     #wmc-panel .pill{display:inline-block;padding:0 6px;border-radius:6px;background:#1e293b;font-size:11px}
     #wmc-panel .ctrls label{position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;border-bottom:1px solid #1e293b;cursor:pointer}
     #wmc-panel .ctrls input[type=number]{width:58px}
-    #wmc-panel .help{margin:0 auto 0 4px;color:#64748b;cursor:help;user-select:none}
+    /* Cercle dessiné en CSS plutôt qu'un glyphe type ⓘ : U+24D8 tombe en tofu
+       dans les polices système d'Android, justement la cible principale. */
+    #wmc-panel .help{margin:0 auto 0 5px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+      width:14px;height:14px;border:1px solid currentColor;border-radius:50%;
+      color:#64748b;font:700 9px/1 system-ui,sans-serif;cursor:help;user-select:none}
     #wmc-panel .help:hover{color:#a78bfa}
     /* Hors flux : une expansion en place ferait sauter les lignes suivantes sous
        le curseur. Pleine largeur du panneau, donc jamais de débordement latéral. */
@@ -31,9 +35,6 @@
       background:#1e293b;color:#cbd5e1;border:1px solid #475569;border-radius:8px;
       padding:6px 8px;font-size:11px;line-height:1.4;font-weight:400;font-style:normal;
       box-shadow:0 4px 14px rgba(0,0,0,.5);cursor:default}
-    /* Les dernières lignes s'ouvrent vers le haut : le panneau est en overflow:auto
-       et rognerait une bulle ancrée en bas. */
-    #wmc-panel .ctrls label:nth-last-child(-n+3) .tip{top:auto;bottom:100%}
     #wmc-panel .help:hover .tip,#wmc-panel .tip.open{display:block}
     #wmc-panel .ctrls .kill{color:#f87171;font-weight:600}
     #wmc-panel .ctrls .dry{color:#fbbf24;font-weight:600}
@@ -110,7 +111,7 @@
       if (c.text) input = `<input type="text" data-k="${c.k}" value="${esc(cfg[c.k])}" placeholder="ton pseudo">`;
       else if (c.num) input = `<input type="number" min="0" data-k="${c.k}" value="${num0(cfg[c.k])}">`;
       else input = `<input type="checkbox" data-k="${c.k}"${cfg[c.k] ? " checked" : ""}>`;
-      const help = WMC_HELP[c.k] ? `<span class="help">ⓘ<span class="tip">${esc(WMC_HELP[c.k])}</span></span>` : "";
+      const help = WMC_HELP[c.k] ? `<span class="help">?<span class="tip">${esc(WMC_HELP[c.k])}</span></span>` : "";
       return `<label${cls}>${c.label}${help} ${input}</label>`;
     }).join("");
     return `<div class="ctrls">${rows}</div>`;

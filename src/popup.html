@@ -6,7 +6,12 @@
       body { font-family: system-ui, sans-serif; width: 270px; margin: 0; padding: 12px; }
       h1 { font-size: 14px; margin: 0 0 10px; }
       label { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; }
-      .help { margin: 0 auto 0 4px; color: #9ca3af; cursor: help; user-select: none; }
+      /* Cercle dessiné en CSS plutôt qu'un glyphe type ⓘ : U+24D8 tombe en tofu
+         dans beaucoup de polices système. */
+      .help { margin: 0 auto 0 5px; flex: none; display: inline-flex; align-items: center;
+        justify-content: center; width: 14px; height: 14px; border: 1px solid currentColor;
+        border-radius: 50%; color: #9ca3af; font: 700 9px/1 system-ui, sans-serif;
+        cursor: help; user-select: none; }
       .help:hover { color: #7c3aed; }
       /* Hors flux : une expansion en place ferait sauter les lignes suivantes. */
       .tip { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 1;
@@ -29,7 +34,7 @@
 
     <label class="kill">Automation active <input type="checkbox" id="enabled" /></label>
     <label class="dry">Mode dry-run <input type="checkbox" id="dryRun" /></label>
-    <p class="hint">Tourne tant que l'onglet du jeu est ouvert. Survole un ⓘ pour savoir à quoi sert un réglage.</p>
+    <p class="hint">Tourne tant que l'onglet du jeu est ouvert. Survole un « ? » pour savoir à quoi sert un réglage.</p>
 
     <div class="section">
       <label>Auto-open paquets <input type="checkbox" id="autoOpen" /></label>

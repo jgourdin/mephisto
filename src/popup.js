@@ -4,14 +4,14 @@
 const POPUP_KEYS = ["enabled", "dryRun", "autoOpen", "autoBid", "maxBidWb", "dailySpendCapWb", "autoSell", "sellStartWb", "myUsername"];
 const DEFAULTS = Object.fromEntries(POPUP_KEYS.map((k) => [k, WMC_DEFAULTS[k]]));
 
-// Aide par champ : un badge ⓘ ajouté au <label> de chaque input connu, plutôt
+// Aide par champ : un badge « ? » ajouté au <label> de chaque input connu, plutôt
 // que 9 badges écrits à la main dans le HTML.
 for (const [key, text] of Object.entries(WMC_HELP)) {
   const label = document.getElementById(key)?.parentElement;
   if (!label || label.tagName !== "LABEL") continue;
   const badge = document.createElement("span");
   badge.className = "help";
-  badge.textContent = "ⓘ";
+  badge.textContent = "?";
   const tip = document.createElement("span");
   tip.className = "tip";
   tip.textContent = text;
