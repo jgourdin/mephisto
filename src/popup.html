@@ -5,7 +5,20 @@
     <style>
       body { font-family: system-ui, sans-serif; width: 270px; margin: 0; padding: 12px; }
       h1 { font-size: 14px; margin: 0 0 10px; }
-      label { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; }
+      label { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; }
+      /* Cercle dessiné en CSS plutôt qu'un glyphe type ⓘ : U+24D8 tombe en tofu
+         dans beaucoup de polices système. */
+      .help { margin: 0 auto 0 5px; flex: none; display: inline-flex; align-items: center;
+        justify-content: center; width: 14px; height: 14px; border: 1px solid currentColor;
+        border-radius: 50%; color: #9ca3af; font: 700 9px/1 system-ui, sans-serif;
+        cursor: help; user-select: none; }
+      .help:hover { color: #7c3aed; }
+      /* Hors flux : une expansion en place ferait sauter les lignes suivantes. */
+      .tip { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 1;
+        background: #1f2937; color: #e5e7eb; border-radius: 8px; padding: 6px 8px;
+        font-size: 11px; line-height: 1.4; font-weight: 400; cursor: default;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); }
+      .help:hover .tip, .tip.open { display: block; }
       input[type="number"], input[type="text"] { width: 70px; }
       .section { border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px; }
       .kill { color: #dc2626; font-weight: 600; }
@@ -21,7 +34,7 @@
 
     <label class="kill">Automation active <input type="checkbox" id="enabled" /></label>
     <label class="dry">Mode dry-run <input type="checkbox" id="dryRun" /></label>
-    <p class="hint">Dry-run = simule (mise/vente/ouverture) sans exécuter. Automation décochée = observation seule. Tourne tant que l'onglet du jeu est ouvert.</p>
+    <p class="hint">Tourne tant que l'onglet du jeu est ouvert. Survole un « ? » pour savoir à quoi sert un réglage.</p>
 
     <div class="section">
       <label>Auto-open paquets <input type="checkbox" id="autoOpen" /></label>
@@ -36,17 +49,17 @@
     <div class="section">
       <label>Auto-sell (flip) <input type="checkbox" id="autoSell" /></label>
       <label>Prix de vente (WB) <input type="number" id="sellStartWb" min="1" /></label>
-      <p class="hint">Reliste tes cartes SR+ (hors favoris ★) à ce prix. Étoile une carte pour ne jamais la vendre.</p>
+      <p class="hint">Étoile une carte dans le jeu pour ne jamais la vendre.</p>
     </div>
 
     <div class="section">
       <label>Mon pseudo <input type="text" id="myUsername" size="10" placeholder="ton pseudo" /></label>
-      <p class="hint">Ton pseudo WikiMasters — pour ne pas enchérir sur tes propres ventes.</p>
     </div>
 
     <button class="link" id="openDashboard">Ouvrir le dashboard</button>
     <p class="hint">Auto-bid réactif : remonte jusqu'à ta mise max pour garder la tête. Jamais sous 15 s restantes (anti-snipe +60 s).</p>
 
+    <script src="config.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
