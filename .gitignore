@@ -19,6 +19,7 @@ android/app/src/main/assets/companion.js
 /mephisto-*.apk
 /mephisto-extension.zip
 /mephisto-firefox.zip
+/updates.json
 # Generated Firefox package (single source = root manifest + src/)
 dist-firefox/
 docs/market-intel.md

@@ -6,7 +6,7 @@
 
 > « Le diable est dans les enchères. »
 
-Extension Chrome (MV3) perso pour [wiki-masters.com](https://www.wiki-masters.com) — projet d'apprentissage/fun : le démon des bonnes affaires qui automatise les corvées du jeu et lit l'avenir des prix, sans tricher en bataille. Ton compte, ton âme, ses conseils cyniques.
+Extension Chrome & Firefox (MV3) perso pour [wiki-masters.com](https://www.wiki-masters.com) — projet d'apprentissage/fun : le démon des bonnes affaires qui automatise les corvées du jeu et lit l'avenir des prix, sans tricher en bataille. Ton compte, ton âme, ses conseils cyniques.
 
 ## Sommaire
 
@@ -79,6 +79,10 @@ Extension pour **navigateur de bureau**, en deux variantes : **Chrome** (et dér
 
 - **Tester tout de suite** : va sur `about:debugging#/runtime/this-firefox` → **« Charger un module complémentaire temporaire »** → sélectionne `mephisto-firefox.zip` (ou son `manifest.json`). Valable jusqu'au redémarrage de Firefox.
 - **Installation permanente / pour tes amis** : Firefox exige une **signature Mozilla**. Soumets `mephisto-firefox.zip` sur [addons.mozilla.org (Developer Hub)](https://addons.mozilla.org/developers/) en **auto-distribution (« On your own » / unlisted)** → Mozilla signe → tu récupères un `.xpi` signé installable définitivement (gratuit, pas de listing public obligatoire).
+- **Mises à jour automatiques** : le manifeste Firefox déclare un `update_url` qui pointe vers `updates.json` (attaché à chaque release). Une fois l'`.xpi` signé installé, Firefox vérifie tout seul et propose les versions suivantes — plus rien à réinstaller à la main.
+- **Données** : le manifeste déclare `data_collection_permissions: none` (exigé par Mozilla depuis 2025) — Firefox l'affiche à l'installation : **aucune donnée collectée ni transmise**. Nécessite **Firefox 140+** (version qui gère cette déclaration).
+
+> **Côté mainteneur** : la signature est automatisée. Pousser un tag `v*` suffit — la CI construit `dist-firefox/`, la fait signer par AMO (`web-ext sign --channel unlisted`), et attache `mephisto-firefox.xpi` + `updates.json` à la release. Prérequis : les secrets GitHub **`AMO_JWT_ISSUER`** et **`AMO_JWT_SECRET`** (Developer Hub → *Manage API Keys*). Sans eux, l'étape est simplement sautée et la release part avec le zip seul — l'`.xpi` peut alors être signé à la main et uploadé sous ce nom exact. Penser à bumper la version dans `manifest.json` : AMO refuse une version déjà soumise.
 
 ### Utilisation (Chrome & Firefox)
 
@@ -108,7 +112,7 @@ _Alternative à l'extension, pour jouer sur Android._ Une app qui charge le jeu 
 
 ### Construire l'APK
 
-- **Automatique (CI)** : pousse un tag `v*` → GitHub Actions (`.github/workflows/android.yml`) régénère le bundle, compile l'APK et l'**attache à la release** (avec le zip de l'extension).
+- **Automatique (CI)** : pousse un tag `v*` → GitHub Actions (`.github/workflows/android.yml`) régénère le bundle, compile l'APK et l'**attache à la release** (avec les zips de l'extension et l'`.xpi` Firefox signé par AMO).
 - **Local** : `node android/tools/build-companion.mjs` puis `cd android && ./gradlew assembleDebug` (JDK 17 + SDK Android requis). APK dans `android/app/build/outputs/apk/debug/`. Le projet s'ouvre aussi dans Android Studio.
 
 ## Structure
@@ -131,7 +135,7 @@ src/background.js     # service worker : badge, notifs, alarmes
 src/popup.html|js     # réglages
 docs/superpowers/     # specs + plans des fonctionnalités récentes
 docs/market-value-analysis.md  # données de marché derrière les plafonds de config.js
-tools/                # build Firefox, régression du classifieur
+tools/                # build Firefox (manifeste gecko + updates.json), régression du classifieur
 android/              # app WebView + build-companion.mjs (bundle régénéré depuis src/)
 ```
 
