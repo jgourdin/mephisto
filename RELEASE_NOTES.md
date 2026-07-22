@@ -1,24 +1,19 @@
-# 😈 Méphisto v0.9.2
+# 😈 Méphisto v0.9.3
 
-Réglage : les plafonds de mise par défaut sont désormais **calibrés sur les vrais prix du marché** WikiMasters, plus des chiffres au doigt mouillé.
+Confort d'usage et distribution : aide contextuelle intégrée partout, et l'extension Firefox est désormais signée automatiquement (installation permanente + mises à jour auto).
 
 ## Changements
 
-- 🎯 **Plafonds de mise par défaut recalibrés** (mesurés sur ~550 enchères réelles) :
-  - Centres d'intérêt : **250 WB** (toutes raretés — un budget dédié, au-dessus des normales)
-  - L : **500** · UR : **150** · SR : **40** · défaut (R/PC/C) : **20**
-  - Plafond de dépense/jour : **1500** — relevé pour rester **≥ au plus gros plafond par carte** (sinon une grosse mise ne part jamais) et enchaîner plusieurs bonnes affaires
-  - Bonus on-theme : **40**
-- Ces valeurs restent des **bornes hautes** : le modèle de désirabilité fait payer moins la plupart du temps. Tout est réglable en direct dans le panneau (et visible dans le Journal de l'IA).
+- 💬 **Aide contextuelle (tooltips)** : chaque réglage du dashboard et de la popup affiche une infobulle qui explique ce qu'il fait — plus besoin de deviner.
+- 🦊 **Extension Firefox auto-signée (AMO)** : la CI signe l'extension via Mozilla (canal *unlisted*). Résultat : installation **permanente** (fini le module temporaire à recharger à chaque redémarrage) et **mises à jour automatiques** via `update_url`.
+- 🛠️ **README & outils Android** : procédure d'installation clarifiée, génération du bundle companion (`build-companion.mjs`) fiabilisée.
 
-> Note : ces défauts s'appliquent aux **nouvelles installations**. Sur une install existante, tes réglages sont conservés — ajuste-les dans le dashboard si tu veux les nouveaux.
-
-Sur la base de la v0.9.1 : plafonds de mise séparés, Journal de l'IA, ciblage par étiquettes (ascendance de graphe Wikipédia), protection anti-vente.
+Sur la base de la v0.9.2 : plafonds de mise calibrés sur le marché réel, Journal de l'IA, ciblage par étiquettes.
 
 ## Installer
 
 - **Chrome / Arc / Brave / Edge** : `mephisto-extension.zip` → décompresse → `chrome://extensions` → Mode développeur → « Charger l'extension non empaquetée ».
-- **Firefox** : `mephisto-firefox.zip` → `about:debugging` → « Charger un module temporaire ».
-- **Android** : `mephisto-v0.9.2.apk` → ouvrir sur le téléphone → autoriser la source.
+- **Firefox** : `mephisto-firefox.xpi` (signé) → ouvre-le dans Firefox pour une installation permanente. À défaut, `mephisto-firefox.zip` → `about:debugging` → « Charger un module temporaire ».
+- **Android** : `mephisto-v0.9.3.apk` → ouvrir sur le téléphone → autoriser la source.
 
 Procédures détaillées dans le [README](https://github.com/jgourdin/mephisto#installation).
